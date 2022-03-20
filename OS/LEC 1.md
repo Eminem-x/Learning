@@ -41,7 +41,7 @@
 2. xv6 has similar structure to UNIX systems but much simpler
 3. Something else has been writted in the book, explaining the difficult points next
 
- <img src="D:\java\JavaCode\Learning\OS\pic\system call.png" alt="system call" style="zoom:80%;" />
+<img src="https://raw.githubusercontent.com/Eminem-x/Learning/main/OS/pic/system%20call.png" alt="system call" style="max-width: 100%;">
 
 ----
 
@@ -92,7 +92,7 @@
 
    The photo may explain it:
 
-    ![fd](D:\java\JavaCode\Learning\OS\pic\fd.png)
+   <img src="https://raw.githubusercontent.com/Eminem-x/Learning/main/OS/pic/fd.png" alt="system call" style="max-width: 100%;">
 
 5. A process may obtain a file descriptor by opening a file, directory, or device,
 
