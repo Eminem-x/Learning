@@ -38,7 +38,11 @@
 ### Introduction to UNIX system calls
 
 1. Applications see the O/S via system call
+
+    <img src="https://raw.githubusercontent.com/Eminem-x/Learning/main/OS/pic/kernel.png" alt="system call" style="max-width: 85%;">
+
 2. xv6 has similar structure to UNIX systems but much simpler
+
 3. Something else has been writted in the book, explaining the difficult points next
 
 <img src="https://raw.githubusercontent.com/Eminem-x/Learning/main/OS/pic/system%20call.png" alt="system call" style="max-width: 100%;">
@@ -92,7 +96,7 @@
 
    The photo may explain it:
 
-   <img src="https://raw.githubusercontent.com/Eminem-x/Learning/main/OS/pic/fd.png" alt="system call" style="max-width: 100%;">
+    <img src="https://raw.githubusercontent.com/Eminem-x/Learning/main/OS/pic/fd.png" alt="system call" style="max-width: 100%;">
 
 5. A process may obtain a file descriptor by opening a file, directory, or device,
 
@@ -120,12 +124,69 @@
 
 ### Pipes
 
+A pipe is a small kernel buffer exposed to processes as a pair of file descriptors, one for reading and one for writing. 
 
+Writing data to one end of the pipe makes that data available for reading from the other end of the pipe. 
 
+Pipes provide a way for processes to communicate. 
 
+1. `pipe` creates a new pipe and records the read and write file descriptors in the array.
 
+2. If no data is available, a `read` on a pipe waits for either data to be written 
 
+   or for all file descriptors referring to the write end of to be close; in the latter case, read will return 0.
+
+3. The xv6 shell implements pipelines, **which may create a tree of processes. **
+
+   The leaves of this tree are commands and the interior nodes are processes 
+
+   that wait until the left and right children complete, 
+
+   such `grep fork sh.c  | wc -l` in a manner similar the under pic:
+
+    <img src="https://raw.githubusercontent.com/Eminem-x/Learning/main/OS/pic/pipe.png" alt="system call" style="max-width: 80%;">
+
+4. Pipes have at least four advantages over temporary files:
+
+   * pipes automatically clean themselves up
+   * pipes can pass arbitrarily long streams of data
+   * pipes allow for parallel execution of pipeline stages
+   * pipes' blocking reads and writes are more efficient
 
 ----
 
 ### File System
+
+The file system provides data files, which contain uninterpreted byte arrays, and directions,
+
+which contain named references to data files and other directories.
+
+The directories form a tree, starting at a special directory called the root.
+
+**The “resources are files” concept** is important.
+
+1. `chdir` changes the process's current directory
+
+2. `open` neither refers to nor changes the process's current directory
+
+3. `mkdir` creates a new directory
+
+4. `mknod` creates a new device file associated with the major and minor device numbers,
+
+   which uniquely identify a kernel device.
+   
+5. **`fstat` retrieves information from the inode that a file descriptors refers to.**
+
+ <img src="https://raw.githubusercontent.com/Eminem-x/Learning/main/OS/pic/fd.png" alt="system call" style="max-width: 85%;">
+
+A file's name is distinct from the file itself; the same underlying file, called an **inode**,
+
+can have multiple names, called **links**. Each link consists of an entry in a directory;
+
+the entry contains a file name and a reference to an inode.
+
+An inode holds **metadata** about a file, including its **type** (file or directory or device),
+
+its **length**, the **location** of the file's content on disk, and the **number of links** to a file.
+
+   
