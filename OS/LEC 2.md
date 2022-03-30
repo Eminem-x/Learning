@@ -100,7 +100,7 @@ A process provides a program with what appears to be a private memory system and
 
 Xv6 maintains a separate page table for each process that defines that process's address space.
 
-![](page-table.png)
+ <img src="https://raw.githubusercontent.com/Eminem-x/Learning/main/OS/pic/page-table.png" alt="system call" style="max-width: 40%">
 
 The xv6 kernel maintains many pieces of state for each process.
 
