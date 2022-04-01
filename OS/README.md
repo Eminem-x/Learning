@@ -2,8 +2,8 @@
 
 如果存在上述问题，可以结合一些其他经典书籍来辅助学习：
 
-* OSTEP 操作系统概论
-* OSAPP 深入理解计算机系统
+* OSTEP 《操作系统概论》
+* OSAPP 《深入理解计算机系统》
 
 再结合该课程推荐的课本：《xv6: a simple, Unix-like teaching operating system》
 
