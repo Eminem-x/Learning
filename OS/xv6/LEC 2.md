@@ -14,7 +14,7 @@ Thus an operating system must fulfill three requirements: multiplexing, isolatio
 
 操作系统必须满足三个要求：多路复用、隔离性、交互性。
 
-
+<br>
 
 There are many ways to achieve these three requirements,
 
@@ -42,7 +42,7 @@ Applications could directly interact with hardware resources and use those resou
 
 但是过于理想化了，现实往往是不信任且存在许多 bugs，所以相比于 cooperative，更好的方式是 strong isolation
 
-
+<br>
 
 Unix application interact with storage only through the file system' `open` , `read` and `close` system calls,
 
@@ -50,7 +50,7 @@ instead of reading and writing the disk directly.
 
 为了避免 app 直接访问操作一些资源，将资源抽象为服务，这是非常必要的。
 
-
+<br>
 
 Similarly, Unix transparently switched hardware CPUs among processes, 
 
@@ -65,7 +65,7 @@ saving and restoring state as necessary, so that applications don't have to be a
 * 多级反馈队列 MLFQ 『Multi-level Feedback Queue』
 * 比例份额 『proportional-share』
 
-
+<br>
 
 Many forms of interaction among Unix processes occur via file descriptors.
 
@@ -81,7 +81,7 @@ Many forms of interaction among Unix processes occur via file descriptors.
 
 为了实现隔离性，OS 必须确保 app 不能修改 OS 的数据指令，以及访问其他进程的内存。
 
-
+<br>
 
 RISC-V has three modes in which the CPU can execute instructions: 
 
@@ -101,7 +101,7 @@ CPU 提供为强隔离性提供硬件支持，RISC-V 提供三种模式。
 
 软件执行 S mode 指令，运行在 kernel space，可以特指 kernel 内核。
 
-
+<br>
 
 An application that wants to invoke a kernel function must transition to the kernel.
 
@@ -109,7 +109,7 @@ An application that wants to invoke a kernel function must transition to the ker
 
 并且切换到 S mode 去终止这个 app，这是非常简单有效的，可以通过系统调用使用功能。
 
-
+<br>
 
 CPUs provide a special instruction that switched the CPU from user mode to supervisor mode
 
@@ -131,7 +131,7 @@ One possibility is that the entire operating system resides in the kernel, calle
 
 一种 OS 设计方式是将整个 OS 都放置在内核中，称为**宏核**。
 
-
+<br>
 
 To reduce the risk of mistakes in the kernel, OS designers can minimize the amount of operating system code that 
 
@@ -143,7 +143,7 @@ This kernel organization is called a `microkernel`.
 
 并且将一部分 OS 放置在 U mode 中，这种称为**微核**。
 
-
+<br>
 
 Xv6 is implemented as a monolithic kernel, like most Unix operating systems.
 
@@ -173,7 +173,7 @@ It also prevents a process from wrecking the kernel itself, so that a process ca
 
 在 xv6 和其他 Unix 操作系统中，隔离的单元称为进程，进程的抽象方便实现了隔离性。
 
-
+<br>
 
 To help enforce isolation, the process abstraction provides the illusion to a program that it has its own private machine. 
 
@@ -183,13 +183,13 @@ A process provides a program with what appears to be a private memory system and
 
 为了更好地**虚拟化**，操作系统需要一些低级机制 mechanism，也就是一些低级方法或协议，实现所需功能。
 
-
+<br>
 
 **Xv6 use page tables to give each process its own address space which translates a virtual address to a physical address.**
 
 页表是由硬件实现的，操作系统需要硬件的支持以便更好地实现功能。
 
-
+<br>
 
 Xv6 maintains a separate page table for each process that defines that process's address space.
 
@@ -205,7 +205,7 @@ A process's most important pieces of kernel state are its page table, kernel sta
 
  <img src="https://raw.githubusercontent.com/Eminem-x/Learning/main/OS/pic/proc.png" alt="system call" style="max-width: 70%">
 
-
+<br>
 
 **Each process has a thread of execution (thread) that executes the process's instructions.**
 
