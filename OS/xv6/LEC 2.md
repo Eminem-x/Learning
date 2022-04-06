@@ -223,5 +223,65 @@ the kernel suspends the currently running thread and resumes another process's t
 
 并且内核栈是独立的（不受用户代码影响），以便内核仍可运行即使用户栈被破坏。
 
+-----
 
+### Code: starting xv6 and the first process
+
+当 RISC-V 计算机启动时，它初始化自己并且运行存储在只读内存中的引导加载程序（boot loader），
+
+引导加载程序加载 xv6 内核进入内存，然后在 M mode 中，CPU 从 `_entry` 开始执行 xv6，
+
+
+
+RISC-V 开始时禁用分页硬件：虚拟地址直接映射到物理地址。
+
+加载程序将 xv6 kernel 加载到物理地址为 `0x80000000` 的内存中，
+
+不从 `0x0` 开始防止内核的原因是从 `0x0` 到 `0x80000000` 中包含 I/O 设备。
+
+<br>
+
+在 `_entry` 中的指令设置一个栈以便 xv6 可以运行 C 语言代码，
+
+xv6在 `start.c` 文件中为 `stack0` 一个初始化栈声明空间，
+
+
+
+`_entry` 处的代码使用将栈指针寄存器 `sp` 加载到栈顶地址『stack0+4096』，
+
+因为 RISC-V 中的栈向下增长，现在 kernel 有了一个栈， `_entry` 开始调用 `start.c` 的代码。
+
+ <br>
+
+函数 `start` 执行一些仅在 M mode 下允许的配置，然后切换到 S mode。
+
+为了进入 S mode， RISC-V 提供 `mret` 指令：该指令最常用于将 S mode 切换到 M mode的调用中返回。
+
+`start` 并非从这样的调用中返回，而是执行以下操作：
+
+* 在寄存器 `mstatus` 中将先前的运行模式改为管理模式
+* 通过将 `main` 函数的地址写入寄存器 `mepc` 将返回地址设为 `main`
+* 通过向页表寄存器 `satp` 写入 0，来在 S mode 下禁用虚拟地址转化
+* 将所有中断和异常委托给 S mode
+* 对时钟芯片进行编程以产生计时器终端
+
+执行完上述操作后，`start` 通过调用 `mret` 『返回』到 S mode，这将导致程序计数器的值更改为 `main` 的函数地址。
+
+
+
+<br>
+
+在 `main` 初始化一些设备和子系统后，它通过调用 `userinit` 创建第一个进程，
+
+
+
+第一个进程执行一个用 RISC-V 汇编写的小程序 `initcode.S`，通过 `exec` 系统调用重新进入内核。
+
+`exec` 重置用一个新程序 `init` 当前进程的内存和寄存器，一旦内核完成 `exec`，它会返回到用户态。
+
+
+
+`init` 如果需要的话创建一个新的控制台设备文件，然后将其作为文件描述符 0、1、2代开，
+
+然后开始运行『shell』 在控制台，整个系统就这样启动了。
 
