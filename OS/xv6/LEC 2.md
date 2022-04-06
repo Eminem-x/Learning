@@ -231,7 +231,7 @@ the kernel suspends the currently running thread and resumes another process's t
 
 引导加载程序加载 xv6 内核进入内存，然后在 M mode 中，CPU 从 `_entry` 开始执行 xv6，
 
-
+ <img src="https://raw.githubusercontent.com/Eminem-x/Learning/main/OS/pic/_entry.png" alt="system call" style="max-width: 70%">
 
 RISC-V 开始时禁用分页硬件：虚拟地址直接映射到物理地址。
 
@@ -245,7 +245,7 @@ RISC-V 开始时禁用分页硬件：虚拟地址直接映射到物理地址。
 
 xv6在 `start.c` 文件中为 `stack0` 一个初始化栈声明空间，
 
-
+ <img src="https://raw.githubusercontent.com/Eminem-x/Learning/main/OS/pic/start-stack.png" alt="system call" style="max-width: 70%">
 
 `_entry` 处的代码使用将栈指针寄存器 `sp` 加载到栈顶地址『stack0+4096』，
 
@@ -267,21 +267,23 @@ xv6在 `start.c` 文件中为 `stack0` 一个初始化栈声明空间，
 
 执行完上述操作后，`start` 通过调用 `mret` 『返回』到 S mode，这将导致程序计数器的值更改为 `main` 的函数地址。
 
-
+ <img src="https://raw.githubusercontent.com/Eminem-x/Learning/main/OS/pic/start.png" alt="system call" style="max-width: 70%">
 
 <br>
 
 在 `main` 初始化一些设备和子系统后，它通过调用 `userinit` 创建第一个进程，
 
-
+ <img src="https://raw.githubusercontent.com/Eminem-x/Learning/main/OS/pic/main.png" alt="system call" style="max-width: 70%">
 
 第一个进程执行一个用 RISC-V 汇编写的小程序 `initcode.S`，通过 `exec` 系统调用重新进入内核。
 
 `exec` 重置用一个新程序 `init` 当前进程的内存和寄存器，一旦内核完成 `exec`，它会返回到用户态。
 
-
+ <img src="https://raw.githubusercontent.com/Eminem-x/Learning/main/OS/pic/initcode.png" alt="system call" style="max-width: 70%">
 
 `init` 如果需要的话创建一个新的控制台设备文件，然后将其作为文件描述符 0、1、2代开，
 
 然后开始运行『shell』 在控制台，整个系统就这样启动了。
+
+ <img src="https://raw.githubusercontent.com/Eminem-x/Learning/main/OS/pic/init.png" alt="system call" style="max-width: 70%">
 
