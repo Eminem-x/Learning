@@ -97,3 +97,11 @@ make qemu 即编译 user 中的文件以及整体的环境，
 运行结果：
 
  <img src="https://raw.githubusercontent.com/Eminem-x/Learning/main/OS/pic/grade-success.png" alt="system call" style="max-width: 100%;">
+
+---
+
+### 6. 实验部分
+
+1. 一定要将书上的部分理解透彻，尤其是代码流程的部分，尽管会觉得枯燥或者厌倦，但是一定要耐着性子读下去
+2. 如果对于某些细节无法处理好，可以适当参考别人完成的代码，先看思路，如果还是写不出来，再看代码
+3. 不在于快，在于精，重点其实还是在于整个操作系统的概念，代码部分是辅助，坚持下去。
