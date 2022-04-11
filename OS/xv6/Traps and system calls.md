@@ -122,13 +122,75 @@ When it needs to force a trap, the RISC-V hardware does the following for all tr
 
 ### Code: Calling system calls
 
+第二章（Operating system organization）以在 `initcode.S` 中执行 `exec` 系统调用结束，
 
+结合接下来的过程，来学习用户调用如何在内核中实现 `exec` 系统调用的。
+
+<br>
+
+The user code places the arguments for `exec` in registers `a0` and `a1`, and puts the system call number in `a7`. 
+
+ <img src="https://raw.githubusercontent.com/Eminem-x/Learning/main/OS/pic/initcode.png" alt="system call" style="max-width: 60%">
+
+System call numbers match the entries in the `syscalls` array, a table of function pointers.
+
+ <img src="https://raw.githubusercontent.com/Eminem-x/Learning/main/OS/pic/syscalls.png" alt="system call" style="max-width: 60%">
+
+The `ecall` instruction traps into the kernel and executes `uservec`, `usertrap`, and then `syscall`, as we saw above.
+
+<br>
+
+`syscall` retrieves the system call number from the saved `a7` in the trapframe and uses it to index into `syscalls`.
+
+When the system call implementation function returns, `syscall` records its return value in `p->trapframe->a0`.
+
+ <img src="https://raw.githubusercontent.com/Eminem-x/Learning/main/OS/pic/syscall.png" alt="system call" style="max-width: 60%">
+
+这将导致原始用户空间对 `exec` 的调用返回该值，因为 RISC-V 的 C 调用约定将返回值放在 `a0` 中，
+
+系统调用通常返回负数表示错误，返回零或正数表示成功，如果系统调用号无效，`syscall` 打印错误并返回 -1。
 
 ---
 
 ### Code: System call arguments
 
+在内核中的系统调用实现需要找到从用户代码传递的参数。
 
+<strong>因为用户代码调用系统调用的封装函数（wrapper functions），所以参数最初被放置在RISC-V C调用所约定的地方：寄存器。</strong>
+
+The kernel trap code saves user registers to the current process's trap frame, where kernel code can find them.
+
+The functions `argint`, `argaddr`, `argfd` retrieve the n'th system call argument from the trap frame as an integer, pointer or a fd.
+
+They all call `argraw` to retrieve the appropriate saved user register.<strong>上述四个函数均在 `kernel/syscall.h` 中实现。</strong>
+
+<br>
+
+有些系统调用传递指针作为参数，内核必须使用这些指针来读取或写入用户内存。
+
+例如：`exec `系统调用传递给内核一个指向用户空间中字符串参数的指针数组。这些指针带来了两个挑战。
+
+首先，用户程序可能有缺陷或恶意，可能会传递给内核一个无效的指针，或者一个旨在欺骗内核访问内核内存而不是用户内存的指针。
+
+其次，xv6内核页表映射与用户页表映射不同，因此内核不能使用普通指令从用户提供的地址加载或存储。
+
+<br>
+
+内核实现了安全地将数据传输到用户提供的地址和从用户提供的地址传输数据的功能。`fetchstr `是一个例子（***kernel/syscall.c***:25）。
+
+文件系统调用，如 `exec`，使用 `fetchstr ` 从用户空间检索字符串文件名参数。`fetchstr`调用 `copyinstr` 来完成这项困难的工作。
+
+ <img src="https://raw.githubusercontent.com/Eminem-x/Learning/main/OS/pic/fetchstr.png" alt="system call" style="max-width: 60%">
+
+`copyinstr`（***kernel/vm.c***:406）从用户页表页表中的虚拟地址 `srcva` 复制 `max` 字节到 `dst`。
+
+它使用 `walkaddr`（它又调用 `walk` ）在软件中遍历页表，以确定 `srcva` 的物理地址 `pa0` 。
+
+由于内核将所有物理RAM地址映射到同一个内核虚拟地址，`copyinstr `可以直接将字符串字节从 `pa0` 复制到 `dst` 。
+
+`walkaddr`（***kernel/vm.c***:95）检查用户提供的虚拟地址是否为进程用户地址空间的一部分，
+
+因此程序不能欺骗内核读取其他内存。一个类似的函数 `copyout`，将数据从内核复制到用户提供的地址。
 
 ---
 
