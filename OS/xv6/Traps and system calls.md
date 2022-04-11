@@ -1,4 +1,4 @@
-### LEC 3
+### Traps and system calls
 
 ----
 
@@ -76,6 +76,18 @@ and that the kernel can read to find out about a trap that has occurred.
   The `SPP` bit indicates whether a trap came from user mode or supervisor mode,
 
   and controls to what mode `sret` return.
+
+`stvec`：Supervisor Trap-Vector Base Address, low two bits are mode.
+
+`sepc`：Machine exception program counter, holds the instruction address to which a return from exception will go.
+
+`scause`：Supervisor Trap Cause
+
+`sscratch`：Supervisor Scratch register, for early trap handler in trampoline.S
+
+`sstatus`：Supervisor Status，`SIE`：Supervisor Interrupt Enable，`SPP`：Previous mode, 1=Supervisor, 0=User
+
+<br>
 
 The above registers relate to traps handled in supervisor mode, and they cannot be read or written in user mode.
 

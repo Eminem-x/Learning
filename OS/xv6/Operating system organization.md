@@ -1,7 +1,3 @@
-### LEC 2
-
-----
-
 ### Operating system organization
 
 * A key requirement for an operating system is to support several activities at once.

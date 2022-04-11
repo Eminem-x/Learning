@@ -1,4 +1,4 @@
-### LEC 1
+### Operating system interfaces
 
 ----
 
