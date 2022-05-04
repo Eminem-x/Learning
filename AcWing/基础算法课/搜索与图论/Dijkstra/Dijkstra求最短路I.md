@@ -18,6 +18,10 @@
    2. 用 `t` 去更新其他结点的最短路径，并将其标为已遍历。
 4. 根据 `dist[n]` 的值得到是否可达，以及最短路径。
 
+<strong>需要注意 `Dijkstra` 算法，不能用于存在负权值的情况，原因如下图：</strong>
+
+<img src="https://raw.githubusercontent.com/Eminem-x/Learning/main/AcWing/pic/Part1/负权情况.png" alt="system call" style="max-width: 65%">
+
 <br>
 
 具体代码实现遇到的问题：
