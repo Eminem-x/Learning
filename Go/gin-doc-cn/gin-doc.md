@@ -215,10 +215,14 @@ router.POST("/form", func(c *gin.Context) {
 - 路由群组
 
 ```go
-	someGroup := router.Group("/someGroup")
-    {
-        someGroup.GET("/someGet", getting)
-		someGroup.POST("/somePost", posting)
+	someGroup := r.Group("/someGroup")
+	{
+		someGroup.GET("/someGet", func(c *gin.Context) {
+			c.String(http.StatusOK, "someGet")
+		})
+		someGroup.GET("allGet", func(c *gin.Context) {
+			c.String(http.StatusOK, "allGet")
+		})
 	}
 ```
 
@@ -236,6 +240,13 @@ router.POST("/form", func(c *gin.Context) {
 你也可以指定某字段是必需的。如果一个字段被 `binding:"required"` 修饰而值却是空的，请求会失败并返回错误。
 
 ```go
+package main
+
+import (
+	"github.com/gin-gonic/gin"
+	"net/http"
+)
+
 // Binding from JSON
 type Login struct {
 	User     string `form:"user" json:"user" binding:"required"`
@@ -246,9 +257,9 @@ func main() {
 	router := gin.Default()
 
 	// 绑定JSON的例子 ({"user": "manu", "password": "123"})
-	router.POST("/loginJSON", func(c *gin.Context) {
+	// 使用 postman 创建 post 请求，并在 Body 下的 raw 写入 {"user": "manu", "password": "123"} json 数据即可
+	router.POST("/loginJson", func(c *gin.Context) {
 		var json Login
-
 		if c.BindJSON(&json) == nil {
 			if json.User == "manu" && json.Password == "123" {
 				c.JSON(http.StatusOK, gin.H{"status": "you are logged in"})
@@ -270,9 +281,11 @@ func main() {
 			}
 		}
 	})
-	// 绑定多媒体表单的例子 (user=manu&password=123)
+
+	// 绑定多媒体表单的例子
+	// (user=manu&password=123) unauthorized || (user=user&password=password) logged in
 	router.POST("/login", func(c *gin.Context) {
-		var form LoginForm
+		var form Login
 		// 你可以显式声明来绑定多媒体表单：
 		// c.BindWith(&form, binding.Form)
 		// 或者使用自动推断:
