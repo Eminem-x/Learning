@@ -1,4 +1,4 @@
-// clock1是一个定期报告时间的TCP服务器
+// clock1 是一个定期报告时间的TCP服务器
 package main
 
 import (
