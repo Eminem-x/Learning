@@ -6,4 +6,10 @@
 4. Go 项目结构规范：https://github.com/golang-standards/project-layout.git
 5. 面向包的设计和架构分层：[https://github.com/danceyoung/paper-code.git](https://github.com/danceyoung/paper-code.git）)
 6. 按照规范快速创建项目的工具 `goslayer`：https://github.com/danceyoung/goslayer.git
+7. Go 学习路线（**强烈推荐**）：https://github.com/Alikhll/golang-developer-roadmap.git
+8. Gin 框架：https://github.com/gin-gonic/gin.git
+9. Gin 中文文档 demo：https://github.com/skyhee/gin-doc-cn.git
+10. Gorm 框架：https://github.com/jinzhu/gorm.git
+11. Casbin：https://github.com/casbin/casbin.git
+12. 命令行工具 cobra：https://github.com/spf13/cobra.git
 
