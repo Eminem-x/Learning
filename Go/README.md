@@ -1,5 +1,9 @@
 一些学习 Go 的资源
 
-1. 《Go程序设计语言》
+1. <a href="https://github.com/Eminem-x/Learning/blob/main/Go/book/Go%E7%A8%8B%E5%BA%8F%E8%AE%BE%E8%AE%A1%E8%AF%AD%E8%A8%80.pdf.zip">《Go程序设计语言》</a>：已上传到仓库中
 2. Go 官网练习：https://go.dev/tour/welcome/1
-3. 通过「LeetCode」练习
+3. 通过「LeetCode」练习基础语法：https://leetcode.cn/
+4. Go 项目结构规范：https://github.com/golang-standards/project-layout.git
+5. 面向包的设计和架构分层：[https://github.com/danceyoung/paper-code.git](https://github.com/danceyoung/paper-code.git）)
+6. 按照规范快速创建项目的工具 `goslayer`：https://github.com/danceyoung/goslayer.git
+
