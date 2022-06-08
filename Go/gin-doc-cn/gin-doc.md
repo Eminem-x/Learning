@@ -158,19 +158,19 @@ gin 框架中采用的路由库是 httprouter。
 
 
 ```go
-	// 创建带有默认中间件的路由:
-	// 日志与恢复中间件
-	router := gin.Default()
-	//创建不带中间件的路由：
-	//r := gin.New()
+// 创建带有默认中间件的路由:
+// 日志与恢复中间件
+router := gin.Default()
+//创建不带中间件的路由：
+//r := gin.New()
 
-	router.GET("/someGet", getting)
-	router.POST("/somePost", posting)
-	router.PUT("/somePut", putting)
-	router.DELETE("/someDelete", deleting)
-	router.PATCH("/somePatch", patching)
-	router.HEAD("/someHead", head)
-	router.OPTIONS("/someOptions", options)
+router.GET("/someGet", getting)
+router.POST("/somePost", posting)
+router.PUT("/somePut", putting)
+router.DELETE("/someDelete", deleting)
+router.PATCH("/somePatch", patching)
+router.HEAD("/someHead", head)
+router.OPTIONS("/someOptions", options)
 ```
 
 <a name="router-param"></a>
@@ -179,25 +179,24 @@ gin 框架中采用的路由库是 httprouter。
 
 api 参数通过Context的Param方法来获取
 
-```
+```go
 router.GET("/string/:name", func(c *gin.Context) {
-    	name := c.Param("name")
-    	fmt.Println("Hello %s", name)
-    })
+	name := c.Param("name")
+	fmt.Println(name)
+})
 ```
 
 URL 参数通过 DefaultQuery 或 Query 方法获取
 
-```
-// url 为 http://localhost:8080/welcome?name=ningskyer时
-// 输出 Hello ningskyer
-// url 为 http://localhost:8080/welcome时
-// 输出 Hello Guest
+```go
+// http://localhost:8080/welcome
+// http://localhost:8080/welcome?name=ycx
+// http://localhost:8080/welcome?name=ycx&lastname=yh
 router.GET("/welcome", func(c *gin.Context) {
-	name := c.DefaultQuery("name", "Guest") //可设置默认值
-	// 是 c.Request.URL.Query().Get("lastname") 的简写
-	lastname := c.Query("lastname") 
-	fmt.Println("Hello %s", name)
+	name := c.DefaultQuery("name", "Guest")
+	lastname := c.Query("lastname")
+	fmt.Printf("Hello %s %s!", name, lastname)
+	fmt.Println()
 })
 ```
 表单参数通过 PostForm 方法获取
