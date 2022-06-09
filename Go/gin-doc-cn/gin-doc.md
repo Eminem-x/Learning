@@ -280,24 +280,8 @@ func main() {
 			}
 		}
 	})
-
-	// 绑定多媒体表单的例子
-	// (user=manu&password=123) unauthorized || (user=user&password=password) logged in
-	router.POST("/login", func(c *gin.Context) {
-		var form Login
-		// 你可以显式声明来绑定多媒体表单：
-		// c.BindWith(&form, binding.Form)
-		// 或者使用自动推断:
-		if c.Bind(&form) == nil {
-			if form.User == "user" && form.Password == "password" {
-				c.JSON(200, gin.H{"status": "you are logged in"})
-			} else {
-				c.JSON(401, gin.H{"status": "unauthorized"})
-			}
-		}
-	})
-	// Listen and serve on 0.0.0.0:8080
-	router.Run(":8080")
+  
+	router.Run()
 }
 ```
 <a name="request"></a>
@@ -312,6 +296,17 @@ func main() {
 - 请求参数
 
 <a name="request-cookie"></a>
+
+```go
+// 简略的请求参数测试
+router.GET("/getRequest", func(c *gin.Context) {
+	path := c.FullPath()
+	url := c.Request.URL
+	method := c.Request.Method
+	c.SetCookie("cookie", "123", 100, "cookie", "cookie", false, false)
+	fmt.Println(path + " " + url.Path + " " + method + " ")
+})
+```
 
 - Cookies
 
@@ -466,10 +461,19 @@ router.StaticFile("/favicon.ico", "./resources/favicon.ico")
 
 - 重定向
 
-```
-r.GET("/redirect", func(c *gin.Context) {
-	//支持内部和外部的重定向
-    c.Redirect(http.StatusMovedPermanently, "http://www.baidu.com/")
+```go
+// 外部重定向
+router.GET("/redirect", func(c *gin.Context) {
+	// http.StatusMovedPermanently为状态码301 永久移动 请求的页面已永久跳转到新的url
+	// 如果请求错误 尝试清空浏览器缓存 因为状态码是永久移动
+	// 返回301状态码进行跳转被Google认为是将网站地址由HTTP迁移到HTTPS的最佳方法
+	c.Redirect(http.StatusMovedPermanently, "https://www.baidu.com")
+})
+
+// 内部重定向
+router.GET("/inner", func(c *gin.Context) {
+	c.Request.URL.Path = "/index"
+	router.HandleContext(c)
 })
 ```
 <a name="sync-async"></a>
