@@ -1,6 +1,6 @@
 ### Create
 
-1. <strong>创建记录</strong>：可以获取记录的详细信息
+1. <strong>创建记录</strong>：可以获取记录的详细信息，连续创建时，需要注意是否唯一 ID
 
    ````go
    user := User{Name: "Jinzhu", Age: 18, Birthday: time.Now()}
@@ -12,7 +12,7 @@
    result.RowsAffected // 返回插入记录的条数
    ````
 
-2. <strong>用指定的字段创建记录</strong>：更新某些字段或忽略传递的字段
+2. <strong>用指定的字段创建记录</strong>：更新某些字段或忽略传递的字段，选定或者忽略时都要考虑是否重复了主键
 
    ````go
    // 更新某些字段
