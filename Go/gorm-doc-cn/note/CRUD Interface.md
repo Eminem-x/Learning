@@ -28,7 +28,9 @@
 
 3. <strong>批量插入</strong>：只需要将 `slice` 传递给 `Create` 即可，过程中钩子方法也会被调用，使用 `CreateInBatches` 可以指定每批数量
 
-4. <strong>创建钩子</strong>：<strong>Hook</strong> 是在创建、查询、更新、删除等操作之前、之后调用的函数，有点 AOP 的味道
+4. <strong>创建钩子</strong>：<strong>Hook</strong> 是在创建、查询、更新、删除等操作之前、之后调用的函数，有点 AOP 的味道,
+
+   当批量操作时，如果存在一条 record 失败了，那么都会失败，如果想跳过钩子方法，可以使用 `SkipHooks` 会话模式。
 
    ```go
    func (u *User) BeforeCreate(tx *gorm.DB) (err error) {
@@ -41,9 +43,21 @@
    }
    ```
 
-5. <strong>根据 Map 创建</strong>：可以避免一些空值无法查询的情况，可以参考下文的 Query 部分
+5. <strong>根据 Map 创建</strong>：可以避免一些空值无法查询的情况，可以参考下文的 Query 部分，实现了这部分 demo，发现存在差异。
 
-6. <strong>高级选项</strong>：关联创建、默认值、Upsert 及冲突
+   没有明白 `Note` 中无法自动填充主键的含义：https://stackoverflow.com/questions/72597438/gorm-create-from-map
+
+6. <strong>使用 SQL 表达式、Context Valuer 创建记录</strong>：Learn it when needed.
+
+7. <strong>高级选项</strong>：`upsert` ：插入一行唯一数据时，若该行数据已存在，则更新该行内容，不存在则插入新的一行
+
+   * <strong>关联创建</strong>：创建关联数据时，如果关联值非零，那么这些关联会被 `upsert`，并且它们的 `Hook` 方法也会被调用，
+
+     可以通过 `Select`、`Omit` 跳过关联保存。
+
+   * <strong>默认值</strong>：需要注意如果插入 `0`，`''`, `false`，会被默认值覆盖，可以采用指针类型或 Scanner/Valuer 来避免这个问题
+
+   * <strong>Upsert 及冲突：</strong>GORM 为不同数据库提供了兼容的 Upsert 支持
 
 ---
 
