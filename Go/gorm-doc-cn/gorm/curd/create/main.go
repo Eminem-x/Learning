@@ -2,8 +2,10 @@ package main
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 	"gorm/config"
 	"time"
 )
@@ -18,6 +20,14 @@ type User struct {
 	ActivateAt   sql.NullTime
 }
 
+func (u *User) BeforeCreate(tx *gorm.DB) (err error) {
+	// when create through a slice, it will prevent the current create if false
+	if u.Name == "jinZhu8" {
+		return errors.New("invalid name")
+	}
+	return
+}
+
 var db *gorm.DB
 
 func main() {
@@ -27,8 +37,11 @@ func main() {
 		panic("failed to auto migrate")
 	}
 
-	createRecord() // create 3 records into the users table
-	batchInsert()  // create 6 records into the users table
+	createRecord()      // create 3 records into the users table
+	batchInsert()       // create 6 records into the users table
+	createHooks()       // create 2 records into the users table
+	createFromMap()     // create 3 records into the users table
+	createFromSqlExpr() // learn this when need
 }
 
 func createRecord() {
@@ -73,4 +86,51 @@ func batchInsert() {
 		{Name: "jinZhu5", Birthday: time.Now()},
 		{Name: "jinZhu6", Birthday: time.Now()}}
 	db.CreateInBatches(&users, 1)
+}
+
+func createHooks() {
+	// failed
+	var users1 = []User{
+		{Name: "jinZhu7", Birthday: time.Now()},
+		{Name: "jinZhu8", Birthday: time.Now()}}
+	db.Create(&users1)
+
+	// success
+	var users2 = []User{
+		{Name: "jinZhu9", Birthday: time.Now()},
+		{Name: "jinZhu10", Birthday: time.Now()}}
+	db.Create(&users2)
+
+	db.Session(&gorm.Session{SkipHooks: true}).Create(&users2)
+}
+
+func createFromMap() {
+	// when creating from map, hooks won't be invoked,
+	// associations won't be saved and primary key values won't be back filled.
+	db.Model(&User{}).Create(map[string]interface{}{
+		"Name": "jinZhu11", "Age": 18,
+	})
+
+	// batch insert from `[]map[string]interface{}{}`
+	db.Model(&User{}).Create([]map[string]interface{}{
+		{"Name": "jinZhu8", "Age": 18}, // hooks won't be invoked
+		{"Name": "jinZhu12", "Age": 20},
+	})
+
+	// what's the meaning of key values won't be, db has three records.
+	// https://stackoverflow.com/questions/72597438/gorm-create-from-map
+}
+
+// learn this when need
+func createFromSqlExpr() {
+	// GORM allows insert data with SQL expression
+	// there are two ways to achieve this goal, create from map[string]interface{} or Customized Data Types,
+
+	// create from map[string]interface{}
+	db.Model(User{}).Create(map[string]interface{}{
+		"Name":     "jinZhu13",
+		"Location": clause.Expr{SQL: "ST_PointFromText(?)", Vars: []interface{}{"POINT(100 100)"}},
+	})
+
+	// customized data types
 }
