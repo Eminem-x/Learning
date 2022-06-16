@@ -40,7 +40,7 @@ func main() {
 	createRecord()      // create 3 records into the users table
 	batchInsert()       // create 6 records into the users table
 	createHooks()       // create 2 records into the users table
-	createFromMap()     // create 3 records into the users table
+	createFromMap()     // create 5 records into the users table
 	createFromSqlExpr() // learn this when need
 }
 
@@ -118,7 +118,16 @@ func createFromMap() {
 	})
 
 	// what's the meaning of key values won't be, db has three records.
+	// This just means that the map will not contain the created primary key as it would when using an object
 	// https://stackoverflow.com/questions/72597438/gorm-create-from-map
+	mapObj := []map[string]interface{}{
+		{"Name": "jinZhu8", "Age": 21},
+		{"Name": "jinZhu12", "Age": 22},
+	}
+
+	db.Model(&User{}).Create(mapObj)
+	fmt.Println(mapObj[0]["ID"]) // nil
+
 }
 
 // learn this when need
