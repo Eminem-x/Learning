@@ -47,6 +47,8 @@
 
    没有明白 `Note` 中无法自动填充主键的含义：https://stackoverflow.com/questions/72597438/gorm-create-from-map
 
+   comment 给出了解答，通过测试发现确实如此：back filled 含义是不会为 map 对象
+
 6. <strong>使用 SQL 表达式、Context Valuer 创建记录</strong>：Learn it when needed.
 
 7. <strong>高级选项</strong>：`upsert` ：插入一行唯一数据时，若该行数据已存在，则更新该行内容，不存在则插入新的一行
@@ -67,9 +69,14 @@
 
 1. <strong>检索单个对象</strong>：`First`、`Take`、`Last`，这里一定要<strong>注意主键 `ID` 的规范约束，如果没有，那么按照第一字段排序</strong>
 
+   * 默认 `First` 是按照 `ID` 查询不参考其他字段，但如果对象未声明 `ID`，那么将获得第一条记录按照 `ID` 升序排列
+   * `Take` 方法在测试后发现，如果对象最初有 `ID`，那么按照主键查询，否则 `Get one record, no specified order`
+   * `...or when the model is specified using db.Model()` 用于将结果传递给一个最初非 `model` 的对象
+   * `no primary key defined, results will be ordered by first field (i.e., code)`，最好还是遵守规定约束
+
 2. <strong>主键检索</strong>：同其他语言的 sql 框架，传入参数查询时，需要特别注意 SQL 注入问题，<strong>如果对象主键已经存在值，那么查询时将绑定</strong>
 
-3. <strong>检索全部对象：</strong>通过调用  `Find` 方法即可
+3. <strong>检索全部对象：</strong>通过调用  `Find` 方法即可，`Select("*").Scan(&model)` 也可以，不过多此一举
 
 4. <strong>条件</strong>：String 条件、Struct & Map 条件（这里需要注意 GORM 的查询方式以及绑定字段机制）
 
@@ -89,7 +96,7 @@
 
 8. <strong>Group By & Having</strong>：条件查询
 
-9. <strong>Joins 预加载</strong>：除去表的关联的作用，有关 Eager Loading 部分，在后面阐述
+9. <strong>Joins 预加载</strong>：除去表的关联的作用，预加载可以是无关的表，也可以是派生表，具体方式可参考官网例子
 
 10. <strong>Scan</strong>：Scanning results into a struct works similarly to the way we use `Find`
 
@@ -101,4 +108,14 @@
     在使用Raw自定义SQL查询时，使用Scan来接收数据，虽然Find也是可以接收的，
 
     但是Find主要还是用来带条件查询的，链接到Raw后面时条件是不起作用的。所以用Scan函数单纯的接收数据就行了。
+
+    > Correct me if I'm wrong but Find is used to automatically use the model to select. 
+    >
+    > Something like db.Find(&ModelName) will be the same as select * from model_name.
+    >
+    > Meanwhile Scan is used if you do raw query where you do 
+    >
+    > "select field_one, b+c as field_two, c as field_three from table_name" 
+    >
+    > then map the result to a custom model depending on your query.
 
