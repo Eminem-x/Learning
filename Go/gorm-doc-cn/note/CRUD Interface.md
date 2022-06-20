@@ -69,9 +69,14 @@
 
 1. <strong>检索单个对象</strong>：`First`、`Take`、`Last`，这里一定要<strong>注意主键 `ID` 的规范约束，如果没有，那么按照第一字段排序</strong>
 
-   * 默认 `First` 是按照 `ID` 查询不参考其他字段，但如果对象未声明 `ID`，那么将获得第一条记录按照 `ID` 升序排列
+   * 默认 `First` 如果对象未声明 `ID`，那么将获得第一条记录按照 `ID` 升序排列，
+
+     如果 `Where` 中带有条件，那么将是一个组合条件查询语句，是否包含 `ID` 取决于对象是否有值
+
    * `Take` 方法在测试后发现，如果对象最初有 `ID`，那么按照主键查询，否则 `Get one record, no specified order`
+
    * `...or when the model is specified using db.Model()` 用于将结果传递给一个最初非 `model` 的对象
+
    * `no primary key defined, results will be ordered by first field (i.e., code)`，最好还是遵守规定约束
 
 2. <strong>主键检索</strong>：同其他语言的 sql 框架，传入参数查询时，需要特别注意 SQL 注入问题，<strong>如果对象主键已经存在值，那么查询时将绑定</strong>
