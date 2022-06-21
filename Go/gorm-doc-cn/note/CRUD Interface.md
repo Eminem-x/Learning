@@ -1,4 +1,4 @@
-### Create
+## Create
 
 1. <strong>创建记录</strong>：可以获取记录的详细信息，连续创建时，需要注意是否唯一 ID
 
@@ -63,7 +63,7 @@
 
 ---
 
-### Query
+## Query
 
 该部分比较需要注意的是：GORM 的规范化约束、分页机制、Joins 预加载
 
@@ -123,4 +123,40 @@
     > "select field_one, b+c as field_two, c as field_three from table_name" 
     >
     > then map the result to a custom model depending on your query.
+
+----
+
+## Advanced Query
+
+---
+
+## Update
+
+1. <strong>Save All fields</strong>: `Save` will save all fields when performing the Updating SQL.
+
+2. <strong>Update single column</strong>: When using the `Model` method and its value has a primary value (ID), 
+   the primary key will be used to build the condition.
+
+3. <strong>Updates multiple columns</strong>: `Updates` supports update with `struct` or `map[string]interface{}`, 
+   when updating with `struct` it will only update non-zero fields by default, you might want to use `map` or `Select` to update.
+
+4. <strong>Update Selected Fields</strong>: you can use `Select`、`Omit` to select or ignore some fields when updating.
+
+5. <strong>Update Hooks</strong>: GORM allows hooks  `BeforeUpdate`,  `AfterUpdate`, those methods will be called when updating a record.
+
+6. <strong>Batch Updates</strong>: If we haven’t specified a record having primary key value with `Model`, GORM will perform a batch updates.
+
+   if you may want to update users with different conditions,  it may does'n work.
+
+7. <strong>BlockGlobalUpdates</strong>: If you perform a batch update without any conditions, GORM won't run it and return error.
+
+   `db.Model(&User{}).Update("name", "jinzhu").Error // gorm.ErrMissingWhereClause`，
+
+   You have to use some conditions or use raw SQL or enable the `AllowGlobalUpdate` mode.
+
+8. <strong>UpdatedRecordsCount</strong>: Get the number of rows affected by a update, `result.RowsAffected`
+
+### Advanced
+
+-----
 
