@@ -1,4 +1,4 @@
-## Create
+# Create
 
 1. <strong>创建记录</strong>：可以获取记录的详细信息，连续创建时，需要注意是否唯一 ID
 
@@ -63,7 +63,7 @@
 
 ---
 
-## Query
+# Query
 
 该部分比较需要注意的是：GORM 的规范化约束、分页机制、Joins 预加载
 
@@ -126,11 +126,11 @@
 
 ----
 
-## Advanced Query
+# Advanced Query
 
 ---
 
-## Update
+# Update
 
 1. <strong>Save All fields</strong>: `Save` will save all fields when performing the Updating SQL.
 
@@ -157,6 +157,26 @@
 8. <strong>UpdatedRecordsCount</strong>: Get the number of rows affected by a update, `result.RowsAffected`
 
 ### Advanced
+
+-----
+
+# Delete
+
+1. <strong>Delete a Record</strong>: When deleting a record, the delete value needs to have primary key combined with other condition.
+
+2. <strong>Delete with primary key:</strong> Using primary key with inline condition, it works with numbers.
+
+3. <strong>Delete Hooks</strong>: Those methods will be called when deleting a record.
+
+4. <strong>Batch Delete</strong>: The specified value has no primary key, GORM will perform a batch delete.
+
+5. <strong>Block Global Delete</strong>: Like Update.
+
+6. <strong>Soft Delete:</strong> The SQL is similar with Update which just make `deleted_at` valued, the record won't be removed from the db.
+
+   But you can find soft deleted records with `Unscoped`
+
+7. <strong>Delete permanently</strong>: You can delete matched records permanently with `Unscoped`.
 
 -----
 
