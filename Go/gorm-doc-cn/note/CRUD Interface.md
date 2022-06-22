@@ -128,6 +128,22 @@
 
 # Advanced Query
 
+1. <strong>Smart Select Fields</strong>: If you often select specific fields with `Select`, 
+
+   you can define a smaller struct for API usage which can select specific fields automatically.
+
+2. <strong>Locking</strong>: GORM supports different types of locks.
+
+3. <strong>Conditions</strong>: You can query with more conditions and subQuery.
+
+4. <strong>In with multiple columns</strong>: Selecting IN with multiple columns.
+
+5. <strong>Named Argument、Find to Map</strong>
+
+6. <strong>FirstOrInit、FirstOrCreate</strong>: This two methods are similar. Besides you can use `Assign` to attributes value to the record.
+
+7. <strong>Scope、Count</strong>: Very frequently used in business 
+
 ---
 
 # Update
