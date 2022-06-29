@@ -20,6 +20,8 @@
 
 没有程序化的方法让一个 `goroutine` 来停止另一个，但是有办法和 `goroutine` 通信来要求它自己停止。
 
+-----
+
 ### 8.2 示例：并发时钟服务器
 
 `clock1.go` 是顺序时钟服务器，它以每秒钟一次的频率向客户端发送当前时间，为了连接到服务器，实现简单版本的 `netcat1.go`，
@@ -27,6 +29,8 @@
 这个程序从网络连接中读取，然后写到标准输出，直到到达 EOF 或者出错，但是第二个客户端必须等到第一个结束才能正常工作，
 
 因为服务器是顺序的，一次只能处理一个客户请求，为此只需要在 `handleConn` 方法前添加 `go` 即可，`clock2.go` 并发处理请求。
+
+----
 
 ### 8.3 示例：并发回声服务器
 
@@ -40,11 +44,15 @@
 
 然而在使用 `go` 关键词的同时，需要慎重地考虑并发地调用时是否安全，事实上对于大多数类型也确实不安全，以后讨论学习。
 
+-----
+
 ### 8.4 Channel
 
 如果说 `goroutine` 是 `Go` 的并发体，那么 `channel` 则是他们之间的通信机制，每个 `channel` 有自己的类型，
 
 可以将其看成数据结构类似于 `map`，因此也是引用传递，其零值为 `nil`，判断是否相同类型可以通过 `==` 比较。
+
+-----
 
 #### 8.4.1 不带缓存的 Channel
 
@@ -109,3 +117,93 @@ func request(hostname string) (response string) { /* ... */ }
 这是一个 `Bug`，和垃圾变量不同，泄漏的 `goroutine` 并不会被自动回收，因此确保每个不再需要的 `goroutine` 能正常退出是重要的。
 
 关于选择是否带缓存的通道，仅仅从书上只能看到理论，但是具体的使用，需要经验处理。
+
+-----
+
+### 8.5 并行循环
+
+> 此节示例：考虑生成一批图像的缩略图问题，因为处理文件的顺序没有关系，操作独立，像这样由一些完全独立的子问题组成的问题称为高度并行。
+
+1. 在第一个版本的 `thumbnails1.go` 中，是简单的串行逻辑，我们需要做的就是实现该过程的高度并行，并且让其合理化。
+
+2. 如果仅单单的在方法前添加 `go` 关键字，得到 `thumbnails2.go` 这是非常危险的，所有的 `goroutine` 在没有完成前就返回了，因为没有等待它们执行完毕。
+
+3. 改进方法就是修改内层 `goroutine`，通过一个共享的通道发送事件向外层报告结果，因为是利用 slice 的切片长度去处理，所以知道确切个数，
+
+   这样就得到了第三个版本 `thumbnails3.go`，在这个方法中需要注意的细节就是：<strong>显示传递参数，内部匿名函数获取循环变量的问题，</strong>
+
+   range 过程中 f 的值被所有的匿名函数值共享并且被后续的迭代所更新，导致所有的 `goroutine` 得到的是 slice 的最后元素。
+
+4. 第三个版本看起来似乎已经很不错了，但是缺少错误处理，需要内层 `goroutine` 向外层返回一个错误，得到 `thumbnails4.go`，需要注意下面的错误：
+
+   ```go
+   for range filenames {
+   	if err := <- errors; err != nil {
+   		return err // 注意：不正确，goroutine 泄漏
+   	}
+   }
+   ```
+
+   当一个 error 被接受后，就没有 `goroutine` 继续从 errors 返回通道上进行接收，直至读完，这是非常危险的行为，
+
+   每一个现存的工作 `goroutine` 在试图发送值到此通道的时候永久阻塞，永不终止，这种情况下的 <strong>`goroutine` 泄漏</strong>可能导致整个程序卡住或者系统内存耗尽。
+
+   通常有两个解决方案：
+
+   * 最简单的方案就是用一个有足够容量的缓冲通道，避免阻塞
+   * 另一个方案就是在返回第一个 error 的同时，创建另一个 `goroutine` 来读完通道，也就是完成处理
+
+5. `thumbnail5.go` 就是采用缓冲通道来处理这个错误
+
+6. 最终的版本 `thumbnail6.go` 返回新文件所占用的总字节数，并且采用 `sync.WaitGroup` 来进行协程间的计数处理，以便确保所有协程完毕后，再操作。
+
+   这个版本的代码尽管简短，但是如此精巧，我不得不附上代码，以便后续的整理更加清晰：
+
+   ````go
+   func makeThumbnails6(filenames <-chan string) int64 {
+   	sizes := make(chan int64)
+   	var wg sync.WaitGroup // 工作 goroutine 的个数
+   	for f := range filenames {
+   		wg.Add(1)
+   		// worker
+   		go func(f string) {
+   			defer wg.Done()
+   			thumb, err := thumbnail.ImageFile(f)
+   			if err != nil {
+   				log.Println(err)
+   				return
+   			}
+   			info, _ := os.Stat(thumb) // 可以忽略错误
+   			sizes <- info.Size()
+   		}(f)
+   	}
+   	
+   	// closer
+   	go func() {
+   		wg.Wait()
+   		close(sizes)
+   	}()
+   	
+   	var total int64
+   	for size := range sizes {
+   		total += size
+   	}
+   	return total
+   }
+   ````
+
+   需要注意 Add 和 Done 方法的不对称性：
+
+   * Add 递增计数器，它必须在工作 `goroutine` 开始之前执行，而不是在中间
+   * 另一方面，不能保证 Add 会在关闭者 `goroutine` 调用 Wait 之前发生
+   * 另外，Add 有一个参数，但 Done 没有，它等价于 Add(-1)
+   * 使用 defer 来确保在发送错误的情况下计数器可以递减
+
+   <strong>在不知道迭代次数的情况下，上面的代码结构是通用的，而 closer 中的等待和关闭必须和 total 并行执行，非常重要。 </strong>
+
+-----
+
+### 8.6 并发的 Web 爬虫
+
+----
+
