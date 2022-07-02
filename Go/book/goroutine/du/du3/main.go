@@ -4,6 +4,7 @@ import (
     "du1/dir"
     "flag"
     "time"
+    "sync"
 )
 
 var verbose = flag.Bool("v", false, "show verbose progress messages")
@@ -18,10 +19,15 @@ func main() {
 
     // 遍历文件树
     fileSizes := make(chan int64)
+    var n sync.WaitGroup
+
+    for _, root := range roots {
+        n.Add(1)
+        go dir.WalkDir(root, &n, fileSizes)
+    }
+
     go func() {
-        for _, root := range roots {
-            dir.WalkDir(root, fileSizes)
-        }
+        n.Wait()
         close(fileSizes)
     }()
 
@@ -30,7 +36,7 @@ func main() {
         tick = time.Tick(500 * time.Millisecond)
     }
     var nfiles, nbytes int64
-loop:
+    loop:
     for {
         select {
         case size, ok := <-fileSizes:
