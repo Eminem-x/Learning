@@ -39,5 +39,5 @@ func main() {
         fmt.Println("Balance = ", Balance())
     }()
 
-    go WithDraw(100)
+    WithDraw(100)
 }
