@@ -19,11 +19,13 @@ func main() {
 	mux.HandleFunc("/admin/stuff", adminHandler())
 
 	log.Print("监听端口 :8081")
+
+	// 当导入其他包时, init 方法会自动执行
 	log.Fatal(http.ListenAndServe(
 		":8081",
 		pkgs.SessionManager.Use(auth.Authorizer(
 			pkgs.AuthEnforcer, // casbin 鉴权
-			pkgs.Authorized,   // 授权用户
+			pkgs.Authorized,   // 预先存储的授权用户
 		)(mux)),
 	))
 }

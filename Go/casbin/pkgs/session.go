@@ -14,6 +14,7 @@ var (
 func init() {
 	SessionManager = scs.NewManager(redisstore.New(&redis.Pool{
 		Dial: func() (redis.Conn, error) {
+			// 连接 redis
 			c, err := redis.Dial("tcp", "127.0.0.1:6379")
 			if err != nil {
 				return nil, err

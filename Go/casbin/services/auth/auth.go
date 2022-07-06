@@ -13,6 +13,7 @@ import (
 func Authorizer(e *casbin.Enforcer, users model.Users) func(next http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		fn := func(w http.ResponseWriter, r *http.Request) {
+			// 从 session 中加载角色名称
 			session := pkgs.SessionManager.Load(r)
 			role, err := session.GetString("role")
 			if err != nil {
@@ -20,6 +21,7 @@ func Authorizer(e *casbin.Enforcer, users model.Users) func(next http.Handler) h
 				return
 			}
 
+			// 如果空 则为匿名用户
 			if role == "" {
 				role = "anonymous"
 			}
@@ -38,7 +40,7 @@ func Authorizer(e *casbin.Enforcer, users model.Users) func(next http.Handler) h
 				}
 			}
 
-			// casbin enforce
+			// casbin enforce 判断是否具有路径权限
 			res, err := e.EnforceSafe(role, r.URL.Path, r.Method)
 			if err != nil {
 				writeError(http.StatusInternalServerError, "内部错误", w, err)
