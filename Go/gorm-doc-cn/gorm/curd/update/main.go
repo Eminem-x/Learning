@@ -18,10 +18,23 @@ type User struct {
 	ActivateAt   sql.NullTime
 }
 
+type FacilityStock struct {
+	gorm.Model
+	FacilityStockType string `gorm:"unique_index:uniq_stocks_with_products;not null;comment:配件发放点（多态）类型;index:idx_facility_stock_type"`
+	FacilityStockID   uint   `gorm:"unique_index:uniq_stocks_with_products;not null;comment:配件发放点（多态）ID;index:idx_facility_stock_id"`
+	ProductID         uint   `gorm:"unique_index:uniq_stocks_with_products;not null;comment:商品ID"`
+	Num               int    `gorm:"default:0;comment:库存量"`
+	IsShow            *bool  `gorm:"comment:是否展示"`
+}
+
 var db *gorm.DB
 
 func main() {
 	db = config.InitDB()
+
+	if err := db.AutoMigrate(&FacilityStock{}); err != nil {
+		panic("failed to auto migrate")
+	}
 
 	savaAllFields()
 	updateSingleColumn()     // update single column
@@ -29,6 +42,7 @@ func main() {
 	updateSelectedFile()     // Select or Omit
 	batchUpdates()
 	blockGlobalUpdates()
+	testUpdatesWithoutModel()
 }
 
 func savaAllFields() {
@@ -102,4 +116,33 @@ func batchUpdates() {
 func blockGlobalUpdates() {
 	result := db.Model(&User{}).Update("name", "jinzhu")
 	fmt.Println(result.Error)
+}
+
+func testUpdatesWithoutModel() {
+
+	t := FacilityStock{Num: 0}
+
+	facilityStock := &t
+
+	db.Model(&FacilityStock{}).Where(
+		"product_id = ? AND facility_stock_id = ? AND facility_stock_type = ?", 0, 24, "machine_trays").
+		Assign(*facilityStock).FirstOrCreate(facilityStock)
+
+	fmt.Println(facilityStock)
+
+	//t := &FacilityStock{
+	//	FacilityStockID:   24,
+	//	FacilityStockType: "machine_trays",
+	//	Num:               1,
+	//}
+	//db.Model(&FacilityStock{}).Create(&t)
+	//fmt.Println(t)
+
+	facilityStock.Num = 0
+	db.Updates(*facilityStock)
+	fmt.Println(facilityStock)
+
+	//t.Num = 1
+	//db.Save(&t)
+	//fmt.Println(t)
 }
