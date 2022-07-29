@@ -35,13 +35,13 @@ func main() {
 	if err := db.AutoMigrate(&FacilityStock{}); err != nil {
 		panic("failed to auto migrate")
 	}
-
-	savaAllFields()
-	updateSingleColumn()     // update single column
-	updatesMultipleColumns() //updates multiple columns
-	updateSelectedFile()     // Select or Omit
-	batchUpdates()
-	blockGlobalUpdates()
+	//
+	//savaAllFields()
+	//updateSingleColumn()     // update single column
+	//updatesMultipleColumns() //updates multiple columns
+	//updateSelectedFile()     // Select or Omit
+	//batchUpdates()
+	//blockGlobalUpdates()
 	testUpdatesWithoutModel()
 }
 
@@ -120,12 +120,19 @@ func blockGlobalUpdates() {
 
 func testUpdatesWithoutModel() {
 
-	t := FacilityStock{Num: 0}
+	searchStock := FacilityStock{
+		FacilityStockType: "machine_trays",
+		FacilityStockID:   57,
+		ProductID:         10,
+	}
 
-	facilityStock := &t
+	facilityStock := &searchStock
 
 	db.Model(&FacilityStock{}).Where(
-		"product_id = ? AND facility_stock_id = ? AND facility_stock_type = ?", 0, 24, "machine_trays").
+		"product_id = ? AND facility_stock_id = ? AND facility_stock_type = ?",
+		facilityStock.ProductID,
+		facilityStock.FacilityStockID,
+		facilityStock.FacilityStockType).
 		Assign(*facilityStock).FirstOrCreate(facilityStock)
 
 	fmt.Println(facilityStock)
@@ -142,6 +149,7 @@ func testUpdatesWithoutModel() {
 	db.Updates(*facilityStock)
 	fmt.Println(facilityStock)
 
+	db.Model(&FacilityStock{}).Where("id = ?", facilityStock.ID).Update("num", facilityStock.Num)
 	//t.Num = 1
 	//db.Save(&t)
 	//fmt.Println(t)
