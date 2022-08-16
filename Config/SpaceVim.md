@@ -42,8 +42,8 @@ nvim
     enable_statusline_mode = false
     # 目录树左边显示
     filetree_direction = "left"
-    # 禁止检查升级
-    checkinstall = false
+    # 开启检查升级 
+    checkinstall = true
 
 # Enable autocomplete layer
 [[layers]]
@@ -72,4 +72,7 @@ default_height = 30
     merged = false
 ```
 
-最后运行 `nvim` 即可，或者 `vim` 即可，具体的操作参考文章开头推荐阅读的链接。
+最后运行 `nvim` 即可，或者 `vim` 即可，最好连接 VPN，
+进入后，执行 `:GoInstallBinayies`，即可得到一个好用的 Go IDE，
+具体的操作参考文章开头推荐阅读的链接。
+
