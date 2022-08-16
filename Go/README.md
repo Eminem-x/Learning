@@ -12,4 +12,7 @@
 10. Gorm 框架：https://github.com/jinzhu/gorm.git
 11. Casbin：https://github.com/casbin/casbin.git
 12. 命令行工具 cobra：https://github.com/spf13/cobra.git
-
+13. HelloGitHub：https://hellogithub.com/onefile/?url=/periodical/category/Go%20%E9%A1%B9%E7%9B%AE/
+14. Go标准库中文文档：http://cngolib.com/io-ioutil.html
+15. Go语言设计与实现：https://draveness.me/golang/
+16. GMP：https://go.cyub.vip/gmp/gmp-model.html、https://segmentfault.com/a/1190000041938854
