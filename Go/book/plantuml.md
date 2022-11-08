@@ -47,3 +47,10 @@ gantt
     another task      : 24d
 ```
 
+-----
+
+可以结合官方绘图 doc 以及网站 https://www.plantuml.com/plantuml/uml/ 进行绘图，选择 plain 样式比较清爽，
+
+但是因为中文字符格式不好看，所以推荐导为 SVG，而后通过 Google 浏览器自带的 screenshot 转换为 PNG，
+
+转换方式可以参考：https://segmentfault.com/a/1190000022902186。
