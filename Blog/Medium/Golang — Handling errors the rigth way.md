@@ -12,10 +12,10 @@ you must explicitly check for errors right after calling a function. Like the fo
 
 ```go
 func main() {
-		_, err := fmt.Println("Hello World")
-		if err != nil {
-				panic(err)
-		}
+  _, err := fmt.Println("Hello World")
+  if err != nil {
+    panic(err)
+  }
 }
 ```
 
@@ -45,27 +45,27 @@ What would happen if it would panic in the deepest function? Take a look at the 
 
 ```go
 func firstLevel() {
-		defer fmt.Println("Exiting first level")
-		secondLevel()
+  defer fmt.Println("Exiting first level")
+  secondLevel()
 }
 
 func secondLevel() {
-		defer fmt.Println("Exiting second level")
-		thirdLevel()
+  defer fmt.Println("Exiting second level")
+  thirdLevel()
 }
 
 func thirdLevel() {
-		defer fmt.Println("Exiting third level")
-		fourthLevel()
+  defer fmt.Println("Exiting third level")
+  fourthLevel()
 }
 
 func fourthLevel() {
-		defer fmt.Println("Exiting fourth level")
-		panic("Panicing on fourth level")
+  defer fmt.Println("Exiting fourth level")
+  panic("Panicing on fourth level")
 }
 
 func main() {
-		firstLevel()
+  firstLevel()
 }
 ```
 
@@ -133,17 +133,17 @@ See the example below:
 
 ```go
 func main() {
-		defer func() {
-				if r := recover(); r != nil {
-						...
-				}
-		}()
-		go Panic()
-		time.Sleep(3 * time.Second) // not recommend
+  defer func() {
+    if r := recover(); r != nil {
+      ...
+    }
+  }()
+  go Panic()
+  time.Sleep(3 * time.Second) // not recommend
 }
 
 func Panic() {
-		panic(1)
+  panic(1)
 }
 ```
 
@@ -167,17 +167,17 @@ In other words, the recover function catches the exception of the stack frame of
 
 ````go
 func main() {
-		defer func() {
-			if r := MyRecover(); r != nil {
-					../
-			}
-		}()
-		
-  	panic(1)
+  defer func() {
+    if r := MyRecover(); r != nil {
+      ../
+    }
+  }()
+
+  panic(1)
 }
 
 func MyRecover() interface{} {
-  	return recover()
+  return recover()
 }
 ````
 
@@ -185,13 +185,13 @@ It won't recover the panic and regain the control of flow, but the next example 
 
 ````go
 func main() {
-		defer MyRecover()
-		
-  	panic(1)
+  defer MyRecover()
+
+  panic(1)
 }
 
 func MyRecover() interface{} {
-  	return recover()
+  return recover()
 }
 ````
 
