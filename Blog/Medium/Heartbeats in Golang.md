@@ -166,6 +166,8 @@ doWork := func(done <-chan interface{}) (<-chan interface{}, <-chan int) {
         defer close(heartbeatStream)
         defer close(workStream)
 
+        // time.Sleep(2*time.Second)
+      
         for i := 0; i < 10; i++ {
             select { 
             case heartbeatStream <- struct{}{}:
@@ -219,3 +221,197 @@ results 9
 ```
 
 You can see in this example that we receive one pulse for every result, as intended.
+
+Where this technique realyy shines is in writing tests.
+
+Interval-based heartbeats can be used in the same fashion, but if you only care that the goroutine has started doing its work,
+
+this style of heartbeat is simple. Consider the following bad test code:
+
+````go
+func TestDoWork_GeneratesAllNumbers(t *testing.T) {
+    done := make(chan interface{})
+    defer close(done)
+
+    intSlice := []int{0, 1, 2, 3, 5}
+    _, results := DoWork(done, intSlice...)
+
+    for i, expected := range intSlice {
+        select {
+        case r := <-results:
+            if r != expected {
+                t.Errorf(
+                  "index %v: expected %v, but received %v,",
+                  i,
+                  expected,
+                  r,
+                )
+            }
+        case <-time.After(1 * time.Second): 
+            t.Fatal("test timed out")
+        }
+    }
+}
+
+func DoWork(
+    done <-chan interface{},
+    nums ...int,
+) (<-chan interface{}, <-chan int) {
+    heartbeat := make(chan interface{}, 1)
+    intStream := make(chan int)
+    go func() {
+        defer close(heartbeat)
+        defer close(intStream)
+
+        time.Sleep(2*time.Second)
+
+        for _, n := range nums {
+            select {
+            case heartbeat <- struct{}{}:
+            default:
+            }
+
+            select {
+            case <-done:
+                return
+            case intStream <- n:
+            }
+        }
+    }()
+
+    return heartbeat, intStream
+}
+````
+
+and running this test produces:
+
+```
+go test ./bad_concurrent_test.go
+  --- FAIL: TestDoWork_GeneratesAllNumbers (1.00s)
+      bad_concurrent_test.go:46: test timed out
+  FAIL
+  FAIL    command-line-arguments  1.002s
+```
+
+This test is bad because it's non-deterministic. In example function, I've ensured this test will fail,
+
+but if I were to remove the `time.Sleep`，the situation actually gets worse: this test will pass at times, and fail at others.
+
+This is an awful, awful position to be in. 
+
+The team no longer knows whether it can trust a test failure and begin ignoring failures the whole endeavor begins to unravel.
+
+Fortunately, with a heartbeat, this is easily solved. Here is a test that is deterministic:
+
+```go
+func TestDoWork_GeneratesAllNumbers(t *testing.T) {
+    done := make(chan interface{})
+    defer close(done)
+
+    intSlice := []int{0, 1, 2, 3, 5}
+    heartbeat, results := DoWork(done, intSlice...)
+
+    <-heartbeat
+
+    i := 0
+    for r := range results {
+        if expected := intSlice[i]; r != expected {
+            t.Errorf("index %v: expected %v, but received %v,", i, expected, r)
+        }
+        i++
+    }
+}
+```
+
+and the result is:
+
+```
+ok  command-line-arguments   2.002s
+```
+
+Because of the heartbeat, we can safely write our test without timeouts.
+
+The only risk we run is of one of our iterations taking an inordinate amount of time.
+
+If that’s important to us, we can utilize the safer interval-based heartbeats and achieve perfect safety.
+
+Here is an example of a test utilizing interval-based heartbeats:
+
+```go
+func DoWork(
+    done <-chan interface{},
+    pulseInterval time.Duration,
+    nums ...int,
+) (<-chan interface{}, <-chan int) {
+    heartbeat := make(chan interface{}, 1)
+    intStream := make(chan int)
+    go func() {
+        defer close(heartbeat)
+        defer close(intStream)
+
+        time.Sleep(2*time.Second)
+
+        pulse := time.Tick(pulseInterval)
+        numLoop:
+        for _, n := range nums {
+            for {
+                select {
+                case <-done:
+                    return
+                case <-pulse:
+                    select {
+                    case heartbeat <- struct{}{}:
+                    default:
+                    }
+                case intStream <- n:
+                    continue numLoop
+                }
+            }
+        }
+    }()
+
+    return heartbeat, intStream
+}
+
+func TestDoWork_GeneratesAllNumbers(t *testing.T) {
+    done := make(chan interface{})
+    defer close(done)
+
+    intSlice := []int{0, 1, 2, 3, 5}
+    const timeout = 2*time.Second
+    heartbeat, results := DoWork(done, timeout/2, intSlice...)
+
+    <-heartbeat
+
+    i := 0
+    for {
+        select {
+        case r, ok := <-results:
+            if ok == false {
+                return
+            } else if expected := intSlice[i]; r != expected {
+                t.Errorf(
+                    "index %v: expected %v, but received %v,",
+                    i,
+                    expected,
+                    r,
+                )
+            }
+            i++
+        case <-heartbeat:
+        case <-time.After(timeout):
+            t.Fatal("test timed out")
+        }
+    }
+}
+```
+
+You’ve probably noticed that this version of the test is much less clear.
+
+The logic of what we’re testing is a bit muddled. For this reason, if you’re reasonably sure the goroutine’s loop won’t stop 
+
+executing once it’s started I recommend only blocking on the first heartbeat and then falling into a simple `range` statement. 
+
+You can write separate tests that specifically test for failing to close channels, loop iterations taking too long, 
+
+and any other timing-related issues.
