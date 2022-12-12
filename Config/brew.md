@@ -18,6 +18,12 @@ you can use uninstall command to uninstall brew (https://github.com/homebrew/ins
 
 `/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/uninstall.sh)"`
 
+```
+- Run these three commands in your terminal to add Homebrew to your PATH:
+    echo '# Set PATH, MANPATH, etc., for Homebrew.' >> /Users/bytedance/.zprofile
+    echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> /Users/bytedance/.zprofile
+    eval "$(/opt/homebrew/bin/brew shellenv)"
+```
 ----
 
 ### Notice
