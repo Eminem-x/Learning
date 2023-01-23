@@ -26,3 +26,6 @@
 -----
 
 > nginx blog：https://dunwu.github.io/nginx-tutorial/#/nginx-quickstart
+
+1. Mac 上 index.html 位置：`nginx -V` 获得相对路径：`/opt/homebrew/Cellar/nginx/1.23.3/html/index.html`
+2. docker 镜像拉起的服务和本地 nginx 不相同
