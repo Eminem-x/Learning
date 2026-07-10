@@ -1,0 +1,334 @@
+<style>
+  :root{
+    --paper:#e9edf2; --panel:#ffffff; --ink:#161b22; --muted:#5d6875;
+    --hair:#d5dce4; --hair-soft:#e3e8ee;
+    --disk-fg:#1c5a8f; --disk-bg:#e6eff8; --disk-edge:#c1d8ec;
+    --mem-fg:#985f0d;  --mem-bg:#fbf1dc;  --mem-edge:#eed7a8;
+    --srv-fg:#4b3d88;  --srv-bg:#ece9f7;  --srv-edge:#d5cdee;
+    --box:#0b7a6b; --box-bg:rgba(11,122,107,.05);
+    --shadow:0 1px 2px rgba(20,30,45,.05),0 8px 24px rgba(20,30,45,.06);
+    --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --paper:#0d1014; --panel:#161b22; --ink:#e6ebf1; --muted:#93a1b1;
+      --hair:#28303a; --hair-soft:#20272f;
+      --disk-fg:#7fb6e8; --disk-bg:#13243a; --disk-edge:#274a6e;
+      --mem-fg:#e2ab5f;  --mem-bg:#2b2112;  --mem-edge:#5b451f;
+      --srv-fg:#b0a4ec;  --srv-bg:#1f1b34;  --srv-edge:#3e3663;
+      --box:#3fbfab; --box-bg:rgba(63,191,171,.07);
+      --shadow:0 1px 2px rgba(0,0,0,.3),0 10px 30px rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="light"]{
+    --paper:#e9edf2; --panel:#ffffff; --ink:#161b22; --muted:#5d6875;
+    --hair:#d5dce4; --hair-soft:#e3e8ee;
+    --disk-fg:#1c5a8f; --disk-bg:#e6eff8; --disk-edge:#c1d8ec;
+    --mem-fg:#985f0d;  --mem-bg:#fbf1dc;  --mem-edge:#eed7a8;
+    --srv-fg:#4b3d88;  --srv-bg:#ece9f7;  --srv-edge:#d5cdee;
+    --box:#0b7a6b; --box-bg:rgba(11,122,107,.05);
+    --shadow:0 1px 2px rgba(20,30,45,.05),0 8px 24px rgba(20,30,45,.06);
+  }
+  :root[data-theme="dark"]{
+    --paper:#0d1014; --panel:#161b22; --ink:#e6ebf1; --muted:#93a1b1;
+    --hair:#28303a; --hair-soft:#20272f;
+    --disk-fg:#7fb6e8; --disk-bg:#13243a; --disk-edge:#274a6e;
+    --mem-fg:#e2ab5f;  --mem-bg:#2b2112;  --mem-edge:#5b451f;
+    --srv-fg:#b0a4ec;  --srv-bg:#1f1b34;  --srv-edge:#3e3663;
+    --box:#3fbfab; --box-bg:rgba(63,191,171,.07);
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 10px 30px rgba(0,0,0,.35);
+  }
+
+  *{box-sizing:border-box}
+  body{margin:0}
+  .wrap{
+    font-family:var(--sans); color:var(--ink); background:var(--paper);
+    -webkit-font-smoothing:antialiased; line-height:1.5;
+    min-height:100vh; padding:clamp(20px,4vw,56px) 20px 72px;
+  }
+  .page{max-width:900px; margin:0 auto}
+
+  /* ---------- header ---------- */
+  .eyebrow{
+    font-family:var(--mono); font-size:12px; letter-spacing:.16em;
+    text-transform:uppercase; color:var(--box); margin:0 0 10px;
+  }
+  h1{
+    font-size:clamp(26px,4.6vw,40px); line-height:1.12; letter-spacing:-.02em;
+    font-weight:800; margin:0 0 6px; text-wrap:balance;
+  }
+  h1 .thin{font-weight:500; color:var(--muted)}
+  .sub{color:var(--muted); font-size:15px; margin:0 0 22px}
+
+  .elevator{
+    background:var(--panel); border:1px solid var(--hair); border-radius:14px;
+    padding:18px 20px; box-shadow:var(--shadow); font-size:14.5px; line-height:1.85;
+    margin-bottom:30px;
+  }
+  .elevator .lead{
+    font-family:var(--mono); font-size:11px; letter-spacing:.14em; text-transform:uppercase;
+    color:var(--muted); display:block; margin-bottom:8px;
+  }
+  .k{font-weight:700; padding:1px 5px; border-radius:5px; white-space:nowrap}
+  .k.disk{color:var(--disk-fg); background:var(--disk-bg)}
+  .k.mem{color:var(--mem-fg); background:var(--mem-bg)}
+  .k.srv{color:var(--srv-fg); background:var(--srv-bg)}
+  .k.box{color:var(--box); background:var(--box-bg)}
+
+  /* ---------- stack ---------- */
+  .stack{display:flex; flex-direction:column; gap:8px; position:relative}
+
+  .layer{
+    display:grid; grid-template-columns:60px 1fr; align-items:stretch;
+    background:var(--panel); border:1px solid var(--hair); border-radius:12px;
+    overflow:hidden; box-shadow:var(--shadow);
+  }
+  .layer .num{
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    font-family:var(--mono); font-variant-numeric:tabular-nums;
+    border-right:1px solid var(--hair-soft); padding:10px 0; gap:2px;
+  }
+  .layer .num b{font-size:24px; font-weight:700; line-height:1}
+  .layer .num span{font-size:10px; color:var(--muted); letter-spacing:.08em}
+  .layer .body{padding:12px 16px}
+  .layer .name{font-weight:700; font-size:15.5px; margin:0 0 4px; letter-spacing:-.01em}
+  .layer .desc{font-family:var(--mono); font-size:12.5px; color:var(--muted); line-height:1.65}
+  .layer .desc .sep{opacity:.45; padding:0 2px}
+
+  /* zone tinting on the number rail */
+  .layer.disk{border-left:3px solid var(--disk-edge)}
+  .layer.disk .num{color:var(--disk-fg); background:var(--disk-bg)}
+  .layer.mem{border-left:3px solid var(--mem-edge)}
+  .layer.mem .num{color:var(--mem-fg); background:var(--mem-bg)}
+  .layer.srv{border-left:3px solid var(--srv-edge)}
+  .layer.srv .num{color:var(--srv-fg); background:var(--srv-bg)}
+
+  /* parallel note (锁 ∥ MVCC) */
+  .par{color:var(--ink); font-weight:600}
+  .par-mark{color:var(--box); font-weight:700; padding:0 3px}
+
+  /* ---------- InnoDB box ---------- */
+  .innodb{
+    position:relative; border:1.5px solid var(--box); border-radius:16px;
+    background:var(--box-bg); padding:34px 12px 12px; margin:2px 0;
+    display:flex; flex-direction:column; gap:8px;
+  }
+  .box-tag{
+    position:absolute; top:-1px; left:-1.5px;
+    background:var(--box); color:#fff; font-size:11.5px; font-weight:600;
+    letter-spacing:.02em; padding:5px 12px; border-radius:14px 0 12px 0;
+    font-family:var(--mono);
+  }
+  .box-tag b{font-weight:800}
+  .box-hint{
+    position:absolute; top:8px; right:14px; font-size:11px; color:var(--box);
+    font-family:var(--mono); opacity:.85;
+  }
+
+  /* ---------- dividers ---------- */
+  .divider{display:flex; align-items:center; gap:12px; margin:2px 4px}
+  .divider .rule{flex:1; height:0; border-top:1.5px dashed var(--hair)}
+  .divider .chip{
+    font-family:var(--mono); font-size:11.5px; letter-spacing:.04em;
+    color:var(--muted); white-space:nowrap; display:flex; align-items:center; gap:6px;
+  }
+  .divider.bridge .rule{border-top-color:var(--mem-edge)}
+  .divider.bridge .chip{color:var(--mem-fg)}
+  .divider .arrow{font-weight:700}
+
+  /* foundation layer 0 sits outside the box */
+  .foundation{margin-top:6px}
+
+  /* ---------- axes + audit ---------- */
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:30px}
+  @media (max-width:640px){.grid2{grid-template-columns:1fr}}
+  .card{
+    background:var(--panel); border:1px solid var(--hair); border-radius:12px;
+    padding:16px 18px; box-shadow:var(--shadow);
+  }
+  .card h3{margin:0 0 8px; font-size:14px; letter-spacing:-.01em; display:flex; align-items:center; gap:8px}
+  .card p{margin:0; font-size:13px; color:var(--muted); line-height:1.7}
+  .dot{width:10px; height:10px; border-radius:3px; flex:none}
+  .dot.disk{background:var(--disk-fg)} .dot.mem{background:var(--mem-fg)}
+  .dot.srv{background:var(--srv-fg)} .dot.box{background:var(--box)}
+
+  .section-label{
+    font-family:var(--mono); font-size:12px; letter-spacing:.14em; text-transform:uppercase;
+    color:var(--muted); margin:38px 0 14px; display:flex; align-items:center; gap:10px;
+  }
+  .section-label::after{content:""; flex:1; height:0; border-top:1px solid var(--hair)}
+
+  .audit{display:flex; flex-direction:column; gap:12px}
+  .audit .card{display:grid; grid-template-columns:auto 1fr; gap:14px; align-items:start}
+  .audit .idx{
+    font-family:var(--mono); font-weight:800; font-size:18px; color:var(--box);
+    line-height:1.2; font-variant-numeric:tabular-nums;
+  }
+  .audit .name{font-weight:700; font-size:14.5px; margin:0 0 4px}
+  .audit .name em{font-style:normal; color:var(--box)}
+
+  footer{margin-top:36px; font-size:12px; color:var(--muted); font-family:var(--mono); text-align:center; line-height:1.7}
+
+  /* ---------- motion: build from the bottom up ---------- */
+  .layer,.innodb,.divider.bridge{opacity:0; transform:translateY(10px); animation:rise .5s ease forwards}
+  @keyframes rise{to{opacity:1; transform:none}}
+  @media (prefers-reduced-motion:reduce){
+    .layer,.innodb,.divider.bridge{opacity:1; transform:none; animation:none}
+  }
+</style>
+
+<div class="wrap">
+<div class="page">
+
+  <p class="eyebrow">格 4 · 关系型数据库 · 复习总台</p>
+  <h1>MySQL 自底向上架构<span class="thin"> · 八层认知地图</span></h1>
+  <p class="sub">一摞<strong>有依赖的层</strong>，不是一堆并列的名词 —— 认知要自底向上搭，还要分清「包含」与「并列」。</p>
+
+  <div class="elevator">
+    <span class="lead">一句话把八层串起来</span>
+    数据按「表空间→页」摆在磁盘，页组织成 <span class="k disk">B+树</span> 当 <span class="k disk">索引</span>；读写先进
+    <span class="k mem">Buffer Pool</span> 内存页；改动靠 <span class="k mem">undo</span> 存旧值、<span class="k mem">redo</span>
+    保证不丢、<span class="k mem">锁 + MVCC</span> 管并发；提交时 redo 和 Server 层的 <span class="k srv">binlog</span> 用
+    <span class="k box">2PC</span> 对齐、binlog 喂给从库；这一切之上，<span class="k srv">优化器</span> 决定怎么查、你用
+    <span class="k srv">EXPLAIN</span> 验证。
+  </div>
+
+  <div class="stack">
+
+    <!-- L7 -->
+    <div class="layer srv" style="animation-delay:.56s">
+      <div class="num"><b>7</b><span>LAYER</span></div>
+      <div class="body">
+        <p class="name">查询优化 &amp; EXPLAIN</p>
+        <p class="desc">执行计划<span class="sep">·</span>索引选择<span class="sep">·</span>type / key_len / Extra<span class="sep">·</span>调优</p>
+      </div>
+    </div>
+
+    <!-- L6 -->
+    <div class="layer srv" style="animation-delay:.48s">
+      <div class="num"><b>6</b><span>LAYER</span></div>
+      <div class="body">
+        <p class="name">Server 层</p>
+        <p class="desc">连接器→分析器→优化器→执行器<span class="sep">·</span>binlog（逻辑 / 跨引擎）→ 主从复制 · PITR<span class="sep">·</span>redo ↔ binlog 用 2PC 对齐</p>
+      </div>
+    </div>
+
+    <div class="divider" style="animation-delay:.44s">
+      <span class="rule"></span>
+      <span class="chip" style="color:var(--box)">╌╌ InnoDB 盒子边界（binlog 在盒外）╌╌</span>
+      <span class="rule"></span>
+    </div>
+
+    <!-- InnoDB box wraps L5..L1 -->
+    <div class="innodb" style="animation-delay:.08s">
+      <span class="box-tag"><b>InnoDB</b> 引擎 · 盒子</span>
+      <span class="box-hint">index / 锁 / MVCC / undo / redo 全在盒内</span>
+
+      <!-- L5 -->
+      <div class="layer mem" style="animation-delay:.40s">
+        <div class="num"><b>5</b><span>LAYER</span></div>
+        <div class="body">
+          <p class="name">事务与并发</p>
+          <p class="desc">redo → WAL / 持久性(D)<span class="sep">·</span><span class="par">锁</span>(行/间隙/next-key)<span class="par-mark">∥</span><span class="par">MVCC</span>(Read View)<span class="sep">·</span>undo ← MVCC 和回滚(A) 的地基<span class="sep">·</span>隔离级别 RU/RC/RR/S</p>
+        </div>
+      </div>
+
+      <!-- L4 -->
+      <div class="layer mem" style="animation-delay:.32s">
+        <div class="num"><b>4</b><span>LAYER</span></div>
+        <div class="body">
+          <p class="name">Buffer Pool <span style="font-weight:500;color:var(--muted);font-size:12px">· 内存侧</span></p>
+          <p class="desc">缓存页<span class="sep">·</span>脏页<span class="sep">·</span>LRU 冷热分离<span class="sep">·</span>change buffer<span class="sep">·</span>doublewrite</p>
+        </div>
+      </div>
+
+      <div class="divider bridge" style="animation-delay:.28s">
+        <span class="rule"></span>
+        <span class="chip">磁盘 <span class="arrow">↕</span> 内存 的桥（先改内存页、后台刷盘）</span>
+        <span class="rule"></span>
+      </div>
+
+      <!-- L3 -->
+      <div class="layer disk" style="animation-delay:.24s">
+        <div class="num"><b>3</b><span>LAYER</span></div>
+        <div class="body">
+          <p class="name">索引</p>
+          <p class="desc">聚簇索引(=数据)<span class="sep">·</span>二级<span class="sep">·</span>覆盖<span class="sep">·</span>最左前缀<span class="sep">·</span>回表<span class="sep">·</span>ICP</p>
+        </div>
+      </div>
+
+      <!-- L2 -->
+      <div class="layer disk" style="animation-delay:.16s">
+        <div class="num"><b>2</b><span>LAYER</span></div>
+        <div class="body">
+          <p class="name">数据结构 · B+树</p>
+          <p class="desc">页作为节点，串成矮胖的树（大扇出、3 层可存千万行）</p>
+        </div>
+      </div>
+
+      <!-- L1 -->
+      <div class="layer disk" style="animation-delay:.08s">
+        <div class="num"><b>1</b><span>LAYER</span></div>
+        <div class="body">
+          <p class="name">物理组织</p>
+          <p class="desc">表空间 → 段 → 区 → 页(16KB) → 行</p>
+        </div>
+      </div>
+    </div><!-- /innodb -->
+
+    <!-- L0 foundation, outside the box -->
+    <div class="layer disk foundation" style="animation-delay:0s">
+      <div class="num"><b>0</b><span>LAYER</span></div>
+      <div class="body">
+        <p class="name">OS / 磁盘 <span style="font-weight:500;color:var(--muted);font-size:12px">· 地基</span></p>
+        <p class="desc">4KB 页<span class="sep">·</span>顺序 IO / 随机 IO</p>
+      </div>
+    </div>
+
+  </div><!-- /stack -->
+
+  <p class="section-label">两条对称轴（记住这两条，整张图就立起来了）</p>
+  <div class="grid2">
+    <div class="card">
+      <h3><span class="dot disk"></span><span class="dot mem"></span>磁盘侧 vs 内存侧</h3>
+      <p>第 1~3 层（表空间 / B+树 / 索引）是数据在<strong>磁盘</strong>怎么摆；第 4~5 层 Buffer Pool 是数据在<strong>内存</strong>怎么缓存。WAL、脏页、<code>trx_commit</code> 全建立在「先改内存页、后台刷盘」这条桥上。</p>
+    </div>
+    <div class="card">
+      <h3><span class="dot box"></span><span class="dot srv"></span>盒子内 vs 盒子外</h3>
+      <p>第 1~5 层全在 InnoDB 盒内（<strong>只救本机</strong>）；第 6 层 binlog 在 Server 层（<strong>跨引擎、喂从库</strong>）。<span style="color:var(--box);font-weight:600">2PC</span> 就是缝合这条边界的针 —— 换成 MyISAM，盒内的 MVCC/redo/undo/行锁全没了。</p>
+    </div>
+  </div>
+
+  <p class="section-label">三条审计红线（平铺背名词最常犯的维度错位）</p>
+  <div class="audit">
+    <div class="card">
+      <div class="idx">①</div>
+      <div>
+        <p class="name">InnoDB 是<em>「盒子」</em>，不是和 index/锁/MVCC 并列的「一层」</p>
+        <p style="margin:0;font-size:13px;color:var(--muted);line-height:1.7">index / 锁 / MVCC / undo / redo 全在盒内，只有 binlog 在盒外。它是第 1~5 层的<strong>容器边界</strong>，不是某一横层。</p>
+      </div>
+    </div>
+    <div class="card">
+      <div class="idx">②</div>
+      <div>
+        <p class="name">undo 垫在 <em>MVCC 下面</em> —— 别把「三大 log」捆成一块</p>
+        <p style="margin:0;font-size:13px;color:var(--muted);line-height:1.7">三者层级散开：undo 是 MVCC 和回滚的地基（排 MVCC 之下）、redo 管持久性、binlog 在 Server 层（不属 ACID）。捆一块恰恰割裂了 undo→MVCC 依赖。</p>
+      </div>
+    </div>
+    <div class="card">
+      <div class="idx">③</div>
+      <div>
+        <p class="name">锁 与 MVCC 是<em>并列</em>的两套并发控制，不是上下层</p>
+        <p style="margin:0;font-size:13px;color:var(--muted);line-height:1.7">锁管<strong>写写冲突 / 当前读</strong>（UPDATE、SELECT…FOR UPDATE），MVCC 管<strong>读写不阻塞 / 快照读</strong>（普通 SELECT）。RR 防幻读 = 快照读(MVCC) + next-key 锁(当前读)，两手都要。</p>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    自底向上 = 从 L0 往上搭 &nbsp;·&nbsp; 复习先过这张图定位「我在哪一层、挂了哪几篇」，卡壳再钻分篇<br>
+    源自 mysql-architecture-bottom-up-map-20260709.md
+  </footer>
+
+</div>
+</div>

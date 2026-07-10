@@ -1,0 +1,47 @@
+# MySQL 三大日志实验台：主 + 从两个 InnoDB 实例
+# 主库开 binlog + GTID，用来演 redo/undo/binlog/2PC；从库用来演复制。
+# 数据落在容器自身文件系统上：docker kill 杀掉 mysqld 后 docker start 同名容器，
+# 会复用 /var/lib/mysql，从而触发 redo 崩溃恢复（这正是实验 2 要看的）。
+services:
+  mysql-primary:
+    image: mysql:8.0
+    container_name: mysql-primary
+    ports:
+      - "3316:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: lab
+    command:
+      - --server-id=1
+      - --log-bin=mysql-bin
+      - --binlog-format=ROW
+      - --gtid-mode=ON
+      - --enforce-gtid-consistency=ON
+      - --sync-binlog=1                       # 双一之一：每次事务刷 binlog 到磁盘
+      - --innodb-flush-log-at-trx-commit=1    # 双一之二：每次提交刷 redo 到磁盘
+      - --innodb-buffer-pool-size=128M
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  mysql-replica:
+    image: mysql:8.0
+    container_name: mysql-replica
+    ports:
+      - "3317:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+    command:
+      - --server-id=2
+      - --log-bin=mysql-bin
+      - --relay-log=relay-bin
+      - --gtid-mode=ON
+      - --enforce-gtid-consistency=ON
+      - --read-only=ON
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
