@@ -94,10 +94,13 @@
 
 | 选题 | 格 | 状态 | 笔记 | 下次复习 |
 |------|:--:|:--:|------|:--:|
-| **数据库索引**：B+ 树、聚簇/二级、覆盖、最左前缀、回表、执行计划、索引失效 | 4 | 进行 | [mysql 面试题库(广度)](./mysql-interview-questions-90-coverage-20260704.md) | 07-05 |
-| **SQL/事务**：隔离级别、MVCC、锁、三大日志（redo/undo/binlog） | 4 | 进行 | [mysql 面试题库(广度)](./mysql-interview-questions-90-coverage-20260704.md) | 07-05 |
-| **树结构**：平衡二叉树/AVL、红黑树、B 树、B+ 树（为何数据库用 B+） | 4/2 | 进行 | [四棵树对比](./tree-structures-bplus-btree-rbtree-20260708.md) | 07-09 |
-| **Redis**：数据结构、单线程模型、持久化、淘汰策略、分布式锁、缓存三大问题 | 5 | 未启 | — | — |
+| **【MySQL 总纲】自底向上认知地图**（八层骨架 + 各分篇索引，复习从这进） | 4 | 进行 | [MySQL 自底向上认知地图](./mysql/mysql-architecture-bottom-up-map-20260709.md) | 07-10 |
+| **数据库索引**：B+ 树、聚簇/二级、覆盖、最左前缀、回表、执行计划、索引失效 | 4 | 进行 | [mysql 面试题库(广度)](./mysql/mysql-interview-questions-90-coverage-20260704.md)、[联合索引·最左前缀·ICP](./mysql/mysql-icp-composite-index-leftmost-prefix-20260709.md) | 07-10 |
+| **SQL/事务**：隔离级别、MVCC、锁、三大日志（redo/undo/binlog） | 4 | 进行 | [mysql 面试题库(广度)](./mysql/mysql-interview-questions-90-coverage-20260704.md)、[三大日志×ACID 动手实验台](./mysql/mysql-logs-lab/README.md)、[MVCC×隔离级别×幻读(含复现)](./mysql/mysql-mvcc-isolation-phantom-read-20260710.md) | 07-11 |
+| **主从复制**：主从/主备/读写分离辨析、异步/半同步/MGR、复制延迟与丢数据 | 4/8 | 进行 | [主从复制·一致性光谱](./mysql/mysql-replication-master-slave-standby-consistency-20260709.md) | 07-10 |
+| **树结构**：平衡二叉树/AVL、红黑树、B 树、B+ 树（为何数据库用 B+） | 4/2 | 进行 | [四棵树对比](./mysql/tree-structures-bplus-btree-rbtree-20260708.md) | 07-09 |
+| **Redis**：数据结构、单线程模型、持久化、淘汰策略、分布式锁、缓存三大问题 | 5 | 进行 | [redis 面试题库(广度)](./redis/redis-interview-questions-90-coverage-20260709.md) | 07-10 |
+| **PostgreSQL**：进程模型、堆表 MVCC、VACUUM/XID 回卷、索引家族、SSI、WAL/复制（对照 MySQL） | 4/7 | 进行 | [postgresql 面试题库(广度)](./postgresql/postgresql-interview-questions-90-coverage-20260709.md) | 07-10 |
 | **MongoDB**：WiredTiger、索引与 explain、副本集、分片 | 5 | 未启 | — | — |
 | **Kafka**：分区副本 ISR、零拷贝+页缓存、ack 语义、消费者组 rebalance | 6 | 未启 | — | — |
 | **存储引擎**：B+Tree vs LSM、WAL、Compaction、RUM 放大（接 ../infra/ PG WAL） | 7 | 未启 | — | — |
