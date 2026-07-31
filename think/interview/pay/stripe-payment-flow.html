@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stripe 支付流程与对象模型</title>
+<style>
+/* 最小 reset：Artifact 平台会注入，本地打开需要自带 */
+*, *::before, *::after { box-sizing: border-box; }
+body { margin: 0; }
+</style>
+<style>
+  :root {
+    --bg: #EDF0F1;
+    --surface: #F8FAFA;
+    --surface-2: #E2E8E9;
+    --ink: #101A1C;
+    --ink-2: #3D4B4F;
+    --ink-3: #6B7B80;
+    --rule: #C5D0D2;
+    --rule-2: #D8E0E1;
+    --accent: #0E7C86;
+    --accent-soft: rgba(14, 124, 134, .10);
+    --ok: #33765A;
+    --warn: #A76D14;
+    --risk: #AB4334;
+    --ok-soft: rgba(51, 118, 90, .12);
+    --warn-soft: rgba(167, 109, 20, .13);
+    --risk-soft: rgba(171, 67, 52, .12);
+
+    --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, "Cascadia Mono", Consolas, "Liberation Mono", monospace;
+    --serif: Charter, "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, "Songti SC", serif;
+
+    --measure: 66ch;
+    --shell: 1120px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #091013; --surface: #0F191D; --surface-2: #15232A;
+      --ink: #E3EDEF; --ink-2: #A6BABF; --ink-3: #6E858B;
+      --rule: #22363D; --rule-2: #1A2A30;
+      --accent: #4FD3DE; --accent-soft: rgba(79, 211, 222, .12);
+      --ok: #63BB8B; --warn: #D6A445; --risk: #DE7A6A;
+      --ok-soft: rgba(99,187,139,.14); --warn-soft: rgba(214,164,69,.14); --risk-soft: rgba(222,122,106,.14);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #091013; --surface: #0F191D; --surface-2: #15232A;
+    --ink: #E3EDEF; --ink-2: #A6BABF; --ink-3: #6E858B;
+    --rule: #22363D; --rule-2: #1A2A30;
+    --accent: #4FD3DE; --accent-soft: rgba(79, 211, 222, .12);
+    --ok: #63BB8B; --warn: #D6A445; --risk: #DE7A6A;
+    --ok-soft: rgba(99,187,139,.14); --warn-soft: rgba(214,164,69,.14); --risk-soft: rgba(222,122,106,.14);
+  }
+  :root[data-theme="light"] {
+    --bg: #EDF0F1; --surface: #F8FAFA; --surface-2: #E2E8E9;
+    --ink: #101A1C; --ink-2: #3D4B4F; --ink-3: #6B7B80;
+    --rule: #C5D0D2; --rule-2: #D8E0E1;
+    --accent: #0E7C86; --accent-soft: rgba(14,124,134,.10);
+    --ok: #33765A; --warn: #A76D14; --risk: #AB4334;
+    --ok-soft: rgba(51,118,90,.12); --warn-soft: rgba(167,109,20,.13); --risk-soft: rgba(171,67,52,.12);
+  }
+
+  * { box-sizing: border-box; }
+
+  .page {
+    background: var(--bg); color: var(--ink);
+    font-family: var(--serif); font-size: 16px; line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+    padding: 0 24px 96px;
+  }
+  .shell { max-width: var(--shell); margin: 0 auto; }
+
+  .masthead {
+    padding: 72px 0 38px; border-bottom: 1px solid var(--rule);
+    display: grid; gap: 20px;
+  }
+  .eyebrow {
+    font-family: var(--mono); font-size: 11px; letter-spacing: .18em;
+    text-transform: uppercase; color: var(--accent); margin: 0;
+  }
+  .masthead__title {
+    font-size: clamp(32px, 5.4vw, 52px); line-height: 1.09;
+    letter-spacing: -.015em; font-weight: 600; margin: 0; text-wrap: balance;
+  }
+  .masthead__thesis { max-width: var(--measure); margin: 0; font-size: 18px; color: var(--ink-2); }
+
+  section { padding: 60px 0 6px; }
+  .sec__head { display: grid; gap: 8px; margin-bottom: 30px; max-width: var(--measure); }
+  .sec__title { font-size: 27px; font-weight: 600; letter-spacing: -.01em; margin: 0; text-wrap: balance; }
+  .sec__lede { margin: 0; color: var(--ink-2); }
+
+  .prose { max-width: var(--measure); color: var(--ink-2); font-size: 15.5px; }
+  .prose + .prose { margin-top: 14px; }
+  .prose strong { color: var(--ink); font-weight: 600; }
+  code {
+    font-family: var(--mono); font-size: .87em; background: var(--surface-2);
+    padding: 1px 5px; border-radius: 2px; color: var(--ink);
+  }
+
+  .callout {
+    border-left: 3px solid var(--accent); background: var(--accent-soft);
+    padding: 16px 20px; border-radius: 0 3px 3px 0; margin: 22px 0;
+    max-width: var(--measure);
+  }
+  .callout p { margin: 0; font-size: 15.5px; color: var(--ink); }
+  .callout--warn { border-left-color: var(--risk); background: var(--risk-soft); }
+
+  /* object cards */
+  .objects { display: grid; gap: 14px; }
+  .obj {
+    background: var(--surface); border: 1px solid var(--rule); border-radius: 3px;
+    padding: 15px 18px; display: grid; grid-template-columns: 190px 1fr; gap: 4px 22px;
+    align-items: start;
+  }
+  .obj__name {
+    font-family: var(--mono); font-size: 13.5px; font-weight: 600;
+    color: var(--accent); margin: 0; overflow-wrap: anywhere;
+  }
+  .obj__role { margin: 0; font-size: 14.5px; color: var(--ink-2); }
+  .obj__role b { color: var(--ink); font-weight: 600; }
+  @media (max-width: 680px) { .obj { grid-template-columns: 1fr; gap: 3px; } }
+
+  /* graph */
+  .graph { display: grid; justify-items: center; gap: 0; margin: 4px 0 8px; }
+  .gnode {
+    background: var(--surface); border: 1px solid var(--rule); border-radius: 3px;
+    padding: 12px 20px; text-align: center; min-width: 240px;
+  }
+  .gnode--hero { border-color: var(--accent); border-width: 2px; }
+  .gnode__t { font-family: var(--mono); font-size: 13.5px; font-weight: 600; margin: 0; color: var(--ink); }
+  .gnode__s { font-family: var(--mono); font-size: 11px; margin: 3px 0 0; color: var(--ink-3); }
+  .gedge { display: grid; justify-items: center; }
+  .gedge__line { width: 0; height: 22px; border-left: 2px solid var(--rule); }
+  .gedge__lbl {
+    font-family: var(--mono); font-size: 10px; letter-spacing: .1em; text-transform: uppercase;
+    color: var(--ink-3); background: var(--bg); padding: 2px 9px;
+    border: 1px solid var(--rule-2); border-radius: 2px;
+  }
+
+  .fork { display: grid; grid-template-columns: 1fr 1fr; gap: 0 26px; align-items: start; width: 100%; }
+  /* .graph 是 justify-items:center 的 grid，空 div 不给宽度会塌成 0 */
+  .fork__yoke {
+    height: 24px; width: 50%;
+    border-top: 2px solid var(--rule);
+    border-left: 2px solid var(--rule);
+    border-right: 2px solid var(--rule);
+  }
+  .fork__arm { display: grid; justify-items: center; }
+  .fork__tag {
+    font-family: var(--mono); font-size: 11px; letter-spacing: .1em;
+    color: var(--accent); padding: 12px 0 10px; text-transform: uppercase;
+  }
+  @media (max-width: 720px) { .fork { grid-template-columns: 1fr; } .fork__yoke { display: none; } }
+
+  /* state machine */
+  .states { display: flex; flex-wrap: wrap; gap: 9px; align-items: center; margin: 6px 0 4px; }
+  .st {
+    font-family: var(--mono); font-size: 12px; padding: 6px 11px;
+    border: 1px solid var(--rule); border-radius: 2px; background: var(--surface);
+    white-space: nowrap; color: var(--ink);
+  }
+  .st--start { border-left: 3px solid var(--accent); }
+  .st--good { border-color: var(--ok); background: var(--ok-soft); color: var(--ok); }
+  .st--bad { border-color: var(--risk); background: var(--risk-soft); color: var(--risk); }
+  .st--hold { border-color: var(--warn); background: var(--warn-soft); color: var(--warn); }
+  .arrow { font-family: var(--mono); color: var(--ink-3); font-size: 13px; }
+
+  /* lanes */
+  .lanes { display: grid; grid-template-columns: 1fr 1fr; gap: 26px; }
+  @media (max-width: 860px) { .lanes { grid-template-columns: 1fr; } }
+  .lane {
+    border: 1px solid var(--rule); border-radius: 3px; background: var(--surface);
+    padding: 20px 22px 22px; display: grid; gap: 14px; align-content: start;
+  }
+  .lane__h { display: grid; gap: 4px; }
+  .lane__t { font-family: var(--mono); font-size: 14px; font-weight: 600; margin: 0; color: var(--ink); }
+  .lane__s { margin: 0; font-size: 13.5px; color: var(--ink-3); }
+  .steps { list-style: none; margin: 0; padding: 0; counter-reset: s; display: grid; gap: 11px; }
+  .step {
+    counter-increment: s; display: grid; grid-template-columns: 24px 1fr; gap: 12px;
+    align-items: start;
+  }
+  .step::before {
+    content: counter(s); font-family: var(--mono); font-size: 11px; color: var(--accent);
+    background: var(--accent-soft); border-radius: 2px; text-align: center;
+    padding: 2px 0; margin-top: 2px;
+  }
+  /* 所有文案必须包在这一个子元素里：.step 是 grid 容器，
+     裸文本和内联标签会各自变成独立 grid item 而被塞进 24px 那一列 */
+  .step__body { font-size: 14.5px; color: var(--ink-2); line-height: 1.55; min-width: 0; }
+  .step__body b { color: var(--ink); font-weight: 600; }
+  .step__body em { font-style: normal; font-family: var(--mono); font-size: 12.5px; color: var(--ink-3); }
+
+  /* table */
+  .scroller { overflow-x: auto; border: 1px solid var(--rule); border-radius: 3px; background: var(--surface); }
+  table { border-collapse: collapse; width: 100%; min-width: 640px; font-size: 14px; }
+  thead th {
+    font-family: var(--mono); font-size: 10px; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--ink-3); text-align: left; font-weight: 500; padding: 12px 16px;
+    border-bottom: 1px solid var(--rule); white-space: nowrap;
+  }
+  tbody td { padding: 12px 16px; border-bottom: 1px solid var(--rule-2); color: var(--ink-2); vertical-align: top; }
+  tbody tr:last-child td { border-bottom: 0; }
+  .mono { font-family: var(--mono); font-size: 13px; color: var(--ink); white-space: nowrap; }
+  .pill {
+    display: inline-block; font-family: var(--mono); font-size: 10.5px; letter-spacing: .05em;
+    padding: 3px 8px; border-radius: 2px; white-space: nowrap;
+  }
+  .pill--ok { background: var(--ok-soft); color: var(--ok); }
+  .pill--bad { background: var(--risk-soft); color: var(--risk); }
+  .pill--warn { background: var(--warn-soft); color: var(--warn); }
+
+  .colophon {
+    margin-top: 62px; padding-top: 22px; border-top: 1px solid var(--rule);
+    font-family: var(--mono); font-size: 11.5px; letter-spacing: .04em;
+    color: var(--ink-3); line-height: 1.8;
+  }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="shell">
+
+    <header class="masthead">
+      <p class="eyebrow">Stripe · 对象模型与支付流程</p>
+      <h1 class="masthead__title">Checkout、Intent、发票、优惠券分别在哪一层</h1>
+      <p class="masthead__thesis">
+        这四个概念难理解，是因为它们不在同一个层次上——一个是界面，一个是状态机，一个是账单，一个是折扣规则。
+        先把层次分清，流程就自然清楚了。
+      </p>
+    </header>
+
+    <!-- 1 -->
+    <section>
+      <div class="sec__head">
+        <p class="eyebrow">第一步</p>
+        <h2 class="sec__title">六个对象，各自一句话</h2>
+        <p class="sec__lede">Stripe 的复杂度全在对象关系上。把这六个记住，剩下的都是组合。</p>
+      </div>
+
+      <div class="objects">
+        <div class="obj">
+          <p class="obj__name">Checkout&nbsp;Session</p>
+          <p class="obj__role"><b>一个收银界面，不是一笔支付。</b>它是个工厂——你告诉它 <code>mode</code>，它去创建真正干活的对象。会话本身只有"开着 / 完成 / 过期"三种状态。</p>
+        </div>
+        <div class="obj">
+          <p class="obj__name">PaymentIntent</p>
+          <p class="obj__role"><b>一笔支付的状态机。</b>所有真实扣款都要经过它，包括订阅的每一期。它管的是"收集支付方式 → 验证 → 扣款"这个过程。</p>
+        </div>
+        <div class="obj">
+          <p class="obj__name">Customer</p>
+          <p class="obj__role"><b>一个长期身份。</b>挂载已保存的卡、默认支付方式、发票地址。订阅必须有 Customer，一次性支付可以没有。</p>
+        </div>
+        <div class="obj">
+          <p class="obj__name">Subscription</p>
+          <p class="obj__role"><b>一份周期性收费的约定。</b>它自己不收钱——它按周期<b>生成发票</b>，由发票去收钱。</p>
+        </div>
+        <div class="obj">
+          <p class="obj__name">Invoice</p>
+          <p class="obj__role"><b>一张账单。</b>列明这一期收多少、含哪些行项目、打了什么折。账单要被"支付"，而支付它的正是一个 PaymentIntent。</p>
+        </div>
+        <div class="obj">
+          <p class="obj__name">Coupon</p>
+          <p class="obj__role"><b>一条折扣规则。</b>本身不作用于任何东西，必须被"挂"到某个对象上才生效——挂的位置决定它影响哪些账单。</p>
+        </div>
+      </div>
+
+      <div class="callout">
+        <p><strong>最关键的一句</strong>：Invoice 是<em>账单</em>，PaymentIntent 是<em>付款</em>。这两件事在 Stripe 里是分开的对象，很多困惑来自把它们混为一谈。</p>
+      </div>
+    </section>
+
+    <!-- 2 -->
+    <section>
+      <div class="sec__head">
+        <p class="eyebrow">第二步</p>
+        <h2 class="sec__title">Checkout Session 是个分叉点</h2>
+        <p class="sec__lede">同一个接口，靠 <code>mode</code> 参数走向完全不同的两套对象。这是理解全流程的枢纽。</p>
+      </div>
+
+      <div class="graph">
+        <div class="gnode gnode--hero">
+          <p class="gnode__t">Checkout Session</p>
+          <p class="gnode__s">你调用 · 返回收银台 URL 或 client_secret</p>
+        </div>
+        <div class="fork__yoke"></div>
+        <div class="fork">
+          <div class="fork__arm">
+            <p class="fork__tag">mode = payment</p>
+            <div class="gnode">
+              <p class="gnode__t">PaymentIntent</p>
+              <p class="gnode__s">直接创建一笔支付</p>
+            </div>
+            <div class="gedge"><div class="gedge__line"></div><span class="gedge__lbl">扣款成功后产生</span><div class="gedge__line"></div></div>
+            <div class="gnode">
+              <p class="gnode__t">Charge</p>
+              <p class="gnode__s">实际的卡交易</p>
+            </div>
+          </div>
+          <div class="fork__arm">
+            <p class="fork__tag">mode = subscription</p>
+            <div class="gnode">
+              <p class="gnode__t">Customer + Subscription</p>
+              <p class="gnode__s">建立长期收费约定</p>
+            </div>
+            <div class="gedge"><div class="gedge__line"></div><span class="gedge__lbl">按周期生成</span><div class="gedge__line"></div></div>
+            <div class="gnode">
+              <p class="gnode__t">Invoice</p>
+              <p class="gnode__s">每期一张账单</p>
+            </div>
+            <div class="gedge"><div class="gedge__line"></div><span class="gedge__lbl">由它来支付</span><div class="gedge__line"></div></div>
+            <div class="gnode">
+              <p class="gnode__t">PaymentIntent</p>
+              <p class="gnode__s">又回到同一个状态机</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <p class="prose" style="margin-top:26px">
+        注意两条路<strong>最终汇合到同一个 PaymentIntent</strong>。区别在于：一次性支付是 Session 直接造一个 Intent；
+        订阅是 Session 造 Subscription，Subscription 造 Invoice，Invoice 再造 Intent。多绕了两层，但底层扣款机制完全一样。
+      </p>
+      <p class="prose">
+        还有第三个 mode：<code>setup</code>。它只保存卡不扣钱，用于"先绑卡、以后再收费"的场景，产生的是 SetupIntent 而不是 PaymentIntent。
+      </p>
+    </section>
+
+    <!-- 3 -->
+    <section>
+      <div class="sec__head">
+        <p class="eyebrow">第三步</p>
+        <h2 class="sec__title">PaymentIntent 的状态机</h2>
+        <p class="sec__lede">这是"钱到底收到没有"的唯一权威。它的状态回答的是过程问题，不是账务问题。</p>
+      </div>
+
+      <div class="states">
+        <span class="st st--start">requires_payment_method</span>
+        <span class="arrow">→</span>
+        <span class="st">requires_confirmation</span>
+        <span class="arrow">→</span>
+        <span class="st st--hold">requires_action</span>
+        <span class="arrow">→</span>
+        <span class="st">processing</span>
+        <span class="arrow">→</span>
+        <span class="st st--good">succeeded</span>
+      </div>
+      <div class="states">
+        <span class="arrow">分支：</span>
+        <span class="st st--hold">requires_capture</span>
+        <span class="arrow">（授权与扣款分离时）</span>
+        <span class="st st--bad">canceled</span>
+      </div>
+
+      <p class="prose" style="margin-top:22px">
+        <code>requires_action</code> 就是 <strong>3DS 验证</strong>那一步——银行要求用户额外确认。这是最容易卡住的状态，
+        因为它需要用户在前端完成交互，服务端只能等。
+      </p>
+      <p class="prose">
+        <code>requires_capture</code> 出现在"先授权后扣款"的场景（比如酒店预授权）。如果你的账户配的是自动扣款，
+        就不会看到这个状态。
+      </p>
+
+      <div class="callout">
+        <p><strong>一个常见误解</strong>：以为要自己轮询 PaymentIntent 的状态。实际上如果你用 Checkout Session，
+        应该监听 <code>checkout.session.completed</code>；Session 会替你把 Intent 的最终结果反映出来。直接盯 Intent 只在你自己管理 Intent 生命周期时才需要。</p>
+      </div>
+    </section>
+
+    <!-- 4 -->
+    <section>
+      <div class="sec__head">
+        <p class="eyebrow">第四步</p>
+        <h2 class="sec__title">两条完整时序，并排看差异</h2>
+        <p class="sec__lede">左边是买一次东西，右边是订阅。注意该监听的 webhook 完全不同。</p>
+      </div>
+
+      <div class="lanes">
+        <div class="lane">
+          <div class="lane__h">
+            <p class="lane__t">一次性支付</p>
+            <p class="lane__s">mode = payment</p>
+          </div>
+          <ol class="steps">
+            <li class="step"><span class="step__body">后端创建 Checkout Session，带上 <b>line_items</b> 和 <em>client_reference_id</em>（把你的订单号塞进去）</span></li>
+            <li class="step"><span class="step__body">Stripe 返回 <b>session.url</b>（托管页）或 <b>client_secret</b>（嵌入式）</span></li>
+            <li class="step"><span class="step__body">用户在收银台填卡</span></li>
+            <li class="step"><span class="step__body">Stripe 创建 <b>PaymentIntent</b>，走完状态机（可能经过 3DS）</span></li>
+            <li class="step"><span class="step__body">扣款成功，产生 <b>Charge</b> 和 <b>BalanceTransaction</b>（手续费在这一步体现）</span></li>
+            <li class="step"><span class="step__body">推送 <em>checkout.session.completed</em> — <b>这是你该监听的事件</b></span></li>
+            <li class="step"><span class="step__body">退款只能事后发起，产生 <b>Refund</b>，推 <em>refund.created</em></span></li>
+          </ol>
+        </div>
+
+        <div class="lane">
+          <div class="lane__h">
+            <p class="lane__t">订阅</p>
+            <p class="lane__s">mode = subscription</p>
+          </div>
+          <ol class="steps">
+            <li class="step"><span class="step__body">后端创建 Checkout Session，带上 <b>Price</b>（含周期定义）和 <em>subscription_data.metadata</em>（订单号只能放这里）</span></li>
+            <li class="step"><span class="step__body">用户填卡并授权<b>周期性扣款</b></span></li>
+            <li class="step"><span class="step__body">Stripe 建 <b>Customer</b>（如果还没有）和 <b>Subscription</b></span></li>
+            <li class="step"><span class="step__body">立即生成<b>首期 Invoice</b>，<em>billing_reason = subscription_create</em></span></li>
+            <li class="step"><span class="step__body">Invoice 通过一个 <b>PaymentIntent</b> 完成支付</span></li>
+            <li class="step"><span class="step__body">推送 <em>invoice.payment_succeeded</em> — <b>这才是"钱到账了"的信号</b></span></li>
+            <li class="step"><span class="step__body">此后每个周期自动重复第 4–6 步，<em>billing_reason = subscription_cycle</em></span></li>
+            <li class="step"><span class="step__body">改套餐推 <em>subscription_update</em>；取消推 <em>customer.subscription.deleted</em></span></li>
+          </ol>
+        </div>
+      </div>
+
+      <div class="callout callout--warn">
+        <p><strong>订阅不要监听 <code>checkout.session.completed</code> 来确认收款。</strong>
+        它只说明"用户走完了收银台"，真正的钱是 Invoice 收的。订阅场景的权威事件是 <code>invoice.payment_succeeded</code>，
+        而且要看它的 <code>billing_reason</code> 区分首期、续费、还是套餐变更。</p>
+      </div>
+    </section>
+
+    <!-- 5 -->
+    <section>
+      <div class="sec__head">
+        <p class="eyebrow">优惠券</p>
+        <h2 class="sec__title">挂在哪，决定它影响什么</h2>
+        <p class="sec__lede">Coupon 本身是惰性的。理解优惠券的关键不是它的字段，而是它的挂载位置。</p>
+      </div>
+
+      <div class="scroller">
+        <table>
+          <thead>
+            <tr><th>挂载位置</th><th>作用范围</th><th>典型用法</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="mono">Checkout Session</td>
+              <td>只影响这一次结算</td>
+              <td>一次性活动折扣，用完即弃</td>
+            </tr>
+            <tr>
+              <td class="mono">Subscription</td>
+              <td>影响该订阅之后生成的发票</td>
+              <td>"首月半价"、"前三期打折"</td>
+            </tr>
+            <tr>
+              <td class="mono">Customer</td>
+              <td>影响这个客户的所有未来发票</td>
+              <td>VIP 长期折扣</td>
+            </tr>
+            <tr>
+              <td class="mono">Invoice</td>
+              <td>只影响这一张账单</td>
+              <td>客服补偿、单次调账</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p class="prose" style="margin-top:24px">
+        Coupon 的三个核心字段：<strong>折扣方式</strong>（<code>percent_off</code> 按比例 或 <code>amount_off</code> 按固定金额），
+        <strong>持续方式</strong>（<code>once</code> 只打一期 / <code>repeating</code> 打 N 期，配 <code>duration_in_months</code> / <code>forever</code> 永久），
+        以及<strong>使用上限</strong>（<code>max_redemptions</code>）。
+      </p>
+
+      <div class="callout">
+        <p><strong>Coupon 和 Promotion Code 是两个对象。</strong>Coupon 是规则本身，你在后台或 API 里创建；
+        Promotion Code 是<em>面向用户的可输入码</em>（比如 <code>SUMMER50</code>），它指向一个 Coupon。
+        如果你想让用户在收银台自己输入优惠码，需要的是 Promotion Code；如果是你在后端直接给用户打折，只用 Coupon 就够了。</p>
+      </div>
+    </section>
+
+    <!-- 6 -->
+    <section>
+      <div class="sec__head">
+        <p class="eyebrow">发票</p>
+        <h2 class="sec__title">账单的生命周期，和它为什么重要</h2>
+        <p class="sec__lede">一次性支付几乎用不到发票；订阅的一切都围绕发票转。</p>
+      </div>
+
+      <div class="states">
+        <span class="st st--start">draft</span>
+        <span class="arrow">→</span>
+        <span class="st">open</span>
+        <span class="arrow">→</span>
+        <span class="st st--good">paid</span>
+        <span class="arrow">或</span>
+        <span class="st st--bad">void</span>
+        <span class="st st--bad">uncollectible</span>
+      </div>
+
+      <p class="prose" style="margin-top:22px">
+        <code>draft</code> 阶段还能改（加行项目、改折扣）；<code>finalize</code> 之后变成 <code>open</code> 就锁定了，
+        此时 Stripe 会尝试扣款。扣款成功变 <code>paid</code>，主动作废是 <code>void</code>，
+        多次尝试失败后被标记为 <code>uncollectible</code>（坏账）。
+      </p>
+      <p class="prose">
+        <strong><code>billing_reason</code> 是订阅对账的关键字段</strong>，它告诉你这张发票为什么产生：
+        <code>subscription_create</code>（首期）、<code>subscription_cycle</code>（自动续费）、
+        <code>subscription_update</code>（套餐变更导致的补差价）、<code>manual</code>（手动开票）。
+        同一个 <code>invoice.payment_succeeded</code> 事件，这三种 reason 对应的业务处理完全不同。
+      </p>
+      <p class="prose">
+        另外有个容易忽略的能力：<strong>预览发票</strong>（upcoming invoice）。它不是真发票，是 Stripe 帮你算出"下一期会收多少"，
+        用来在界面上展示续费金额，或者在用户改套餐前告诉他要补多少差价。
+      </p>
+    </section>
+
+    <!-- 7 -->
+    <section>
+      <div class="sec__head">
+        <p class="eyebrow">对照本项目</p>
+        <h2 class="sec__title">hertz_pay 实际用了哪些</h2>
+        <p class="sec__lede">知道了标准模型，就能看出本项目哪里跟直觉不符。</p>
+      </div>
+
+      <div class="scroller">
+        <table>
+          <thead>
+            <tr><th>本项目接口</th><th>实际调的 Stripe API</th><th>返回</th><th>状态</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="mono">/stripe/checkout</td>
+              <td>Checkout Session · <code>mode=payment</code> · hosted</td>
+              <td>托管页 URL</td>
+              <td><span class="pill pill--ok">正常</span></td>
+            </tr>
+            <tr>
+              <td class="mono">/stripe/payment-intents</td>
+              <td>Checkout Session · <code>mode=payment</code> · embedded</td>
+              <td>client_secret</td>
+              <td><span class="pill pill--warn">名不副实</span></td>
+            </tr>
+            <tr>
+              <td class="mono">/stripe/subscribe</td>
+              <td>Checkout Session · <code>mode=subscription</code></td>
+              <td>托管页 URL</td>
+              <td><span class="pill pill--ok">正常</span></td>
+            </tr>
+            <tr>
+              <td class="mono">/stripe/unsubscribe</td>
+              <td>Subscriptions.Update · <code>cancel_at_period_end=true</code></td>
+              <td>—</td>
+              <td><span class="pill pill--ok">到期取消</span></td>
+            </tr>
+            <tr>
+              <td class="mono">/stripe/subscription/update</td>
+              <td>Subscriptions.Update · <code>proration=always_invoice</code></td>
+              <td>状态 + 周期末</td>
+              <td><span class="pill pill--warn">立即扣款</span></td>
+            </tr>
+            <tr>
+              <td class="mono">/stripe/invoices/list</td>
+              <td>Invoices.List</td>
+              <td>发票列表</td>
+              <td><span class="pill pill--bad">无分页</span></td>
+            </tr>
+            <tr>
+              <td class="mono">/stripe/coupon/info</td>
+              <td>Coupons.Retrieve + Prices.List</td>
+              <td>券详情</td>
+              <td><span class="pill pill--ok">带缓存</span></td>
+            </tr>
+            <tr>
+              <td class="mono">/stripe/trade_close</td>
+              <td><b>什么都不调</b></td>
+              <td>假的成功</td>
+              <td><span class="pill pill--bad">空实现</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout callout--warn">
+        <p><strong><code>/stripe/payment-intents</code> 这个接口不调用 PaymentIntents API。</strong>
+        它底层同样是 Checkout Session，只是把 <code>ui_mode</code> 设成 <code>embedded</code> 然后返回 client_secret。
+        真正调用 PaymentIntents 的代码在 <code>biz/adapter/stripe/payment_intent.go</code>，但那是<em>死代码，零调用方</em>。
+        看接口名去理解它会完全跑偏。</p>
+      </div>
+
+      <p class="prose">
+        <strong>优惠券在本项目里的用法</strong>：如果调用方直接传了 <code>coupon_id</code>，就引用现成的券；
+        否则当折扣金额不为零时，会<em>动态创建</em>一个 Coupon（<code>max_redemptions=1</code>，默认 <code>once</code>，
+        指定了月数则改成 <code>repeating</code>），挂在 Checkout Session 上。所以每次促销下单都会在 Stripe 里留下一个一次性券对象。
+      </p>
+      <p class="prose">
+        <strong>发票的用法</strong>：订阅每期的 Invoice 整个 JSON 被存进 <code>payment_subscribe.invoices</code> 列；
+        续费时不更新原记录，而是把旧记录置为终止再<em>插入一条新记录</em>——所以这张表是"每个计费周期一行"，不是"每个订阅一行"。
+      </p>
+    </section>
+
+    <!-- 8 -->
+    <section>
+      <div class="sec__head">
+        <p class="eyebrow">最后</p>
+        <h2 class="sec__title">三个 webhook 分支是坏的</h2>
+        <p class="sec__lede">这三个问题都源自同一件事：一次性支付和订阅的记录存在两张不同的表里，而事件处理没有分清。</p>
+      </div>
+
+      <div class="scroller">
+        <table>
+          <thead>
+            <tr><th>事件</th><th>代码去哪张表查</th><th>实际问题</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="mono">checkout.session.completed</td>
+              <td><code>order</code></td>
+              <td>订阅的 session 存在 <code>payment_subscribe</code> 里，所以<b>每次订阅支付完成都会报错</b></td>
+            </tr>
+            <tr>
+              <td class="mono">checkout.session.expired</td>
+              <td><code>payment_subscribe</code></td>
+              <td>反向对称问题：一次性支付的 session 过期<b>必然报错</b>，实际靠轮询兜底</td>
+            </tr>
+            <tr>
+              <td class="mono">payment_intent.succeeded</td>
+              <td><code>order</code> 按 <code>sessions_id</code></td>
+              <td>库里存的是 <code>cs_xxx</code>（Session ID），事件带的是 <code>pi_xxx</code>（Intent ID），<b>永远查不到</b></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p class="prose" style="margin-top:24px">
+        第三条尤其能说明"分不清层次"的代价：<strong>Session 和 Intent 是两个对象，ID 前缀都不一样</strong>，
+        拿一个去查另一个必然落空。这条 handler 是死路径，一次性支付实际是靠 <code>checkout.session.completed</code> 生效的。
+      </p>
+      <p class="prose">
+        还有一个更隐蔽的：webhook 处理失败时只打日志、不写 HTTP 错误响应，于是返回 200，
+        <strong>Stripe 认为投递成功、不会重试</strong>。数据库抖动就等于永久丢事件。
+      </p>
+    </section>
+
+    <p class="colophon">
+      对象模型依据 Stripe API 通用语义整理 · 本项目实现细节经源码复核<br>
+      非 Stripe 官方文档，具体字段行为请以 stripe.com/docs 为准
+    </p>
+
+  </div>
+</div>
+</body>
+</html>

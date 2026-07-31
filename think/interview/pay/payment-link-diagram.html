@@ -1,0 +1,1104 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>hertz_pay 支付链路图</title>
+<style>
+/* 最小 reset：Artifact 平台会注入，本地打开需要自带 */
+*, *::before, *::after { box-sizing: border-box; }
+body { margin: 0; }
+</style>
+<style>
+  :root {
+    --bg: #EDF0F1;
+    --surface: #F8FAFA;
+    --surface-2: #E2E8E9;
+    --ink: #101A1C;
+    --ink-2: #3D4B4F;
+    --ink-3: #6B7B80;
+    --rule: #C5D0D2;
+    --rule-2: #D8E0E1;
+    --accent: #0E7C86;
+    --accent-soft: rgba(14, 124, 134, .10);
+    --ok: #33765A;
+    --warn: #A76D14;
+    --risk: #AB4334;
+    --ok-soft: rgba(51, 118, 90, .12);
+    --warn-soft: rgba(167, 109, 20, .13);
+    --risk-soft: rgba(171, 67, 52, .12);
+
+    --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, "Cascadia Mono", Consolas, "Liberation Mono", monospace;
+    --serif: Charter, "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, "Songti SC", serif;
+
+    --measure: 66ch;
+    --shell: 1080px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #091013;
+      --surface: #0F191D;
+      --surface-2: #15232A;
+      --ink: #E3EDEF;
+      --ink-2: #A6BABF;
+      --ink-3: #6E858B;
+      --rule: #22363D;
+      --rule-2: #1A2A30;
+      --accent: #4FD3DE;
+      --accent-soft: rgba(79, 211, 222, .12);
+      --ok: #63BB8B;
+      --warn: #D6A445;
+      --risk: #DE7A6A;
+      --ok-soft: rgba(99, 187, 139, .14);
+      --warn-soft: rgba(214, 164, 69, .14);
+      --risk-soft: rgba(222, 122, 106, .14);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --bg: #091013;
+    --surface: #0F191D;
+    --surface-2: #15232A;
+    --ink: #E3EDEF;
+    --ink-2: #A6BABF;
+    --ink-3: #6E858B;
+    --rule: #22363D;
+    --rule-2: #1A2A30;
+    --accent: #4FD3DE;
+    --accent-soft: rgba(79, 211, 222, .12);
+    --ok: #63BB8B;
+    --warn: #D6A445;
+    --risk: #DE7A6A;
+    --ok-soft: rgba(99, 187, 139, .14);
+    --warn-soft: rgba(214, 164, 69, .14);
+    --risk-soft: rgba(222, 122, 106, .14);
+  }
+
+  :root[data-theme="light"] {
+    --bg: #EDF0F1;
+    --surface: #F8FAFA;
+    --surface-2: #E2E8E9;
+    --ink: #101A1C;
+    --ink-2: #3D4B4F;
+    --ink-3: #6B7B80;
+    --rule: #C5D0D2;
+    --rule-2: #D8E0E1;
+    --accent: #0E7C86;
+    --accent-soft: rgba(14, 124, 134, .10);
+    --ok: #33765A;
+    --warn: #A76D14;
+    --risk: #AB4334;
+    --ok-soft: rgba(51, 118, 90, .12);
+    --warn-soft: rgba(167, 109, 20, .13);
+    --risk-soft: rgba(171, 67, 52, .12);
+  }
+
+  * { box-sizing: border-box; }
+
+  .page {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--serif);
+    font-size: 16px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+    padding: 0 24px 96px;
+  }
+
+  .shell {
+    max-width: var(--shell);
+    margin: 0 auto;
+  }
+
+  /* ---------- masthead ---------- */
+
+  .masthead {
+    padding: 72px 0 40px;
+    border-bottom: 1px solid var(--rule);
+    display: grid;
+    gap: 22px;
+  }
+
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: .18em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 0;
+  }
+
+  .masthead__title {
+    font-family: var(--serif);
+    font-size: clamp(34px, 6vw, 56px);
+    line-height: 1.08;
+    letter-spacing: -.015em;
+    font-weight: 600;
+    margin: 0;
+    text-wrap: balance;
+  }
+
+  .masthead__thesis {
+    max-width: var(--measure);
+    margin: 0;
+    font-size: 18px;
+    color: var(--ink-2);
+  }
+
+  .facts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0;
+    margin: 10px 0 0;
+    padding: 0;
+    border-top: 1px solid var(--rule-2);
+  }
+
+  .facts div {
+    padding: 14px 26px 14px 0;
+    margin-right: 26px;
+    border-right: 1px solid var(--rule-2);
+  }
+
+  .facts div:last-child { border-right: 0; }
+
+  .facts dt {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    margin: 0 0 3px;
+  }
+
+  .facts dd {
+    margin: 0;
+    font-family: var(--mono);
+    font-size: 15px;
+    font-variant-numeric: tabular-nums;
+    color: var(--ink);
+  }
+
+  /* ---------- legend ---------- */
+
+  .legend {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    gap: 18px 30px;
+    padding: 26px 0 34px;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .legend__item {
+    display: grid;
+    grid-template-columns: 34px 1fr;
+    gap: 12px;
+    align-items: start;
+  }
+
+  .legend__swatch {
+    height: 0;
+    margin-top: 11px;
+    border-top-width: 2px;
+  }
+
+  .legend__swatch--solid { border-top-style: solid; border-top-color: var(--accent); }
+  .legend__swatch--async { border-top-style: dashed; border-top-color: var(--warn); }
+  .legend__swatch--broken { border-top-style: dotted; border-top-color: var(--risk); border-top-width: 3px; }
+
+  .legend__name {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: .04em;
+    margin: 0;
+    color: var(--ink);
+  }
+
+  .legend__note {
+    margin: 2px 0 0;
+    font-size: 13.5px;
+    line-height: 1.45;
+    color: var(--ink-3);
+  }
+
+  /* ---------- acts ---------- */
+
+  .act { padding: 62px 0 10px; }
+
+  .act__head {
+    display: grid;
+    gap: 8px;
+    margin-bottom: 34px;
+    max-width: var(--measure);
+  }
+
+  .act__title {
+    font-family: var(--serif);
+    font-size: 27px;
+    font-weight: 600;
+    letter-spacing: -.01em;
+    margin: 0;
+  }
+
+  .act__lede {
+    margin: 0;
+    color: var(--ink-2);
+    font-size: 16px;
+  }
+
+  /* ---------- flow ---------- */
+
+  .flow {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    justify-items: stretch;
+  }
+
+  .node {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    padding: 16px 20px 17px;
+    display: grid;
+    gap: 5px;
+    position: relative;
+  }
+
+  .node--entry { border-left: 3px solid var(--accent); }
+  .node--exit { border-left: 3px solid var(--ok); }
+  .node--hazard { border-left: 3px solid var(--risk); background: var(--surface); }
+
+  .node__meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    margin: 0;
+  }
+
+  .kind {
+    font-family: var(--mono);
+    font-size: 9.5px;
+    letter-spacing: .15em;
+    text-transform: uppercase;
+    padding: 3px 7px;
+    border-radius: 2px;
+    background: var(--surface-2);
+    color: var(--ink-2);
+    white-space: nowrap;
+  }
+
+  .kind--ext { background: var(--accent-soft); color: var(--accent); }
+  .kind--risk { background: var(--risk-soft); color: var(--risk); }
+  .kind--warn { background: var(--warn-soft); color: var(--warn); }
+  .kind--ok { background: var(--ok-soft); color: var(--ok); }
+
+  .node__title {
+    font-family: var(--mono);
+    font-size: 14.5px;
+    line-height: 1.45;
+    font-weight: 600;
+    letter-spacing: -.01em;
+    margin: 0;
+    color: var(--ink);
+    overflow-wrap: anywhere;
+  }
+
+  .node__desc {
+    margin: 0;
+    font-size: 14.5px;
+    line-height: 1.55;
+    color: var(--ink-2);
+    max-width: 62ch;
+  }
+
+  .node__src {
+    font-family: var(--mono);
+    font-size: 11.5px;
+    color: var(--ink-3);
+    margin: 3px 0 0;
+    overflow-wrap: anywhere;
+  }
+
+  /* connectors */
+
+  .link {
+    display: grid;
+    justify-items: center;
+    padding: 0;
+    position: relative;
+  }
+
+  .link__rule {
+    width: 0;
+    height: 34px;
+    border-left-width: 2px;
+    border-left-style: solid;
+    border-left-color: var(--accent);
+  }
+
+  .link--async .link__rule { border-left-style: dashed; border-left-color: var(--warn); }
+  .link--broken .link__rule { border-left-style: dotted; border-left-width: 3px; border-left-color: var(--risk); }
+
+  .link__tag {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: .06em;
+    color: var(--ink-3);
+    background: var(--bg);
+    padding: 3px 10px;
+    border: 1px solid var(--rule-2);
+    border-radius: 2px;
+    margin: -1px 0;
+    text-align: center;
+  }
+
+  .link--broken .link__tag { color: var(--risk); border-color: var(--risk); }
+  .link--async .link__tag { color: var(--warn); border-color: var(--rule); }
+
+  /* branch */
+
+  .branch {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0 28px;
+    align-items: start;
+  }
+
+  .branch__arm { display: grid; }
+
+  .branch__label {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: .15em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    text-align: center;
+    padding: 12px 0 14px;
+  }
+
+  .branch__yoke {
+    height: 26px;
+    border-top: 2px solid var(--rule);
+    border-left: 2px solid var(--rule);
+    border-right: 2px solid var(--rule);
+    margin: 0 25%;
+  }
+
+  @media (max-width: 720px) {
+    .branch { grid-template-columns: 1fr; gap: 0; }
+    .branch__yoke { display: none; }
+  }
+
+  /* ---------- island ---------- */
+
+  .island {
+    border: 1px dashed var(--rule);
+    border-radius: 3px;
+    padding: 28px 26px 30px;
+    background: var(--surface);
+    display: grid;
+    gap: 20px;
+  }
+
+  .island__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(215px, 1fr));
+    gap: 18px;
+  }
+
+  .bucket {
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    padding: 15px 16px;
+    background: var(--bg);
+    display: grid;
+    gap: 4px;
+  }
+
+  .bucket__name {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    font-weight: 600;
+    margin: 0;
+    color: var(--ink);
+  }
+
+  .bucket__note {
+    margin: 0;
+    font-size: 13.5px;
+    line-height: 1.5;
+    color: var(--ink-3);
+  }
+
+  /* ---------- table ---------- */
+
+  .scroller {
+    overflow-x: auto;
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    background: var(--surface);
+  }
+
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    min-width: 720px;
+    font-size: 14px;
+  }
+
+  thead th {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    text-align: left;
+    font-weight: 500;
+    padding: 13px 16px;
+    border-bottom: 1px solid var(--rule);
+    white-space: nowrap;
+  }
+
+  tbody td {
+    padding: 13px 16px;
+    border-bottom: 1px solid var(--rule-2);
+    color: var(--ink-2);
+    vertical-align: top;
+  }
+
+  tbody tr:last-child td { border-bottom: 0; }
+
+  .chan {
+    font-family: var(--mono);
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--ink);
+    white-space: nowrap;
+  }
+
+  .pill {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: .06em;
+    padding: 3px 8px;
+    border-radius: 2px;
+    white-space: nowrap;
+  }
+
+  .pill--ok { background: var(--ok-soft); color: var(--ok); }
+  .pill--warn { background: var(--warn-soft); color: var(--warn); }
+  .pill--risk { background: var(--risk-soft); color: var(--risk); }
+  .pill--none { background: var(--surface-2); color: var(--ink-3); }
+
+  /* ---------- gaps ---------- */
+
+  .gaps {
+    list-style: none;
+    counter-reset: gap;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 0;
+    border-top: 1px solid var(--rule);
+  }
+
+  .gap {
+    counter-increment: gap;
+    display: grid;
+    grid-template-columns: 54px 1fr;
+    gap: 0 20px;
+    padding: 22px 0;
+    border-bottom: 1px solid var(--rule-2);
+    align-items: start;
+  }
+
+  .gap::before {
+    content: counter(gap, decimal-leading-zero);
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--risk);
+    letter-spacing: .06em;
+    padding-top: 3px;
+  }
+
+  .gap__body { display: grid; gap: 6px; }
+
+  .gap__title {
+    font-family: var(--mono);
+    font-size: 14.5px;
+    font-weight: 600;
+    margin: 0;
+    color: var(--ink);
+    letter-spacing: -.005em;
+  }
+
+  .gap__desc {
+    margin: 0;
+    font-size: 14.5px;
+    line-height: 1.6;
+    color: var(--ink-2);
+    max-width: var(--measure);
+  }
+
+  .gap__src {
+    font-family: var(--mono);
+    font-size: 11.5px;
+    color: var(--ink-3);
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+
+  /* ---------- misc ---------- */
+
+  .prose {
+    max-width: var(--measure);
+    color: var(--ink-2);
+    font-size: 15.5px;
+  }
+
+  .prose strong { color: var(--ink); font-weight: 600; }
+
+  code {
+    font-family: var(--mono);
+    font-size: .88em;
+    background: var(--surface-2);
+    padding: 1px 5px;
+    border-radius: 2px;
+    color: var(--ink);
+  }
+
+  .colophon {
+    margin-top: 64px;
+    padding-top: 24px;
+    border-top: 1px solid var(--rule);
+    font-family: var(--mono);
+    font-size: 11.5px;
+    letter-spacing: .04em;
+    color: var(--ink-3);
+    line-height: 1.8;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="shell">
+
+    <header class="masthead">
+      <p class="eyebrow">hertz_pay · 系统链路</p>
+      <h1 class="masthead__title">一笔钱从下单到通知，要走过的每一段</h1>
+      <p class="masthead__thesis">
+        这张图按代码实际执行路径绘制，不是设计意图。线型编码的是链路质量：
+        哪一段可靠、哪一段尽力而为、哪一段会静默丢事件。
+      </p>
+      <dl class="facts">
+        <div>
+          <dt>接入渠道</dt>
+          <dd>5 个</dd>
+        </div>
+        <div>
+          <dt>技术栈</dt>
+          <dd>Go · Hertz · GORM</dd>
+        </div>
+        <div>
+          <dt>异步骨干</dt>
+          <dd>Kafka · watermill</dd>
+        </div>
+        <div>
+          <dt>钱包关系</dt>
+          <dd>不在链路上</dd>
+        </div>
+      </dl>
+    </header>
+
+    <section class="legend" aria-label="线型说明">
+      <div class="legend__item">
+        <div class="legend__swatch legend__swatch--solid"></div>
+        <div>
+          <p class="legend__name">同步 · 可靠</p>
+          <p class="legend__note">同一次调用或同一个事务内完成，失败会向上返回。</p>
+        </div>
+      </div>
+      <div class="legend__item">
+        <div class="legend__swatch legend__swatch--async"></div>
+        <div>
+          <p class="legend__name">异步 · 尽力而为</p>
+          <p class="legend__note">跨 goroutine、跨事务或靠轮询驱动，失败不影响上游成功。</p>
+        </div>
+      </div>
+      <div class="legend__item">
+        <div class="legend__swatch legend__swatch--broken"></div>
+        <div>
+          <p class="legend__name">断点</p>
+          <p class="legend__note">错误被丢弃或守卫失效，消息到这里就没了，且无处可查。</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ ACT 1 ============ -->
+    <section class="act">
+      <div class="act__head">
+        <p class="eyebrow">第一段</p>
+        <h2 class="act__title">收单：从请求到一条待付款订单</h2>
+        <p class="act__lede">
+          这一段是同步的，全程在一次 HTTP 调用里完成。没有统一收单入口——调用方自己决定用哪个渠道，直接打那个渠道的路径。
+        </p>
+      </div>
+
+      <ol class="flow">
+        <li class="node node--entry">
+          <p class="node__meta"><span class="kind kind--ext">上游</span><span class="kind">HTTP</span></p>
+          <h3 class="node__title">POST /api/v1/payment/{channel}/checkout…</h3>
+          <p class="node__desc">
+            业务方带 Basic Auth 和 Client-ID 发起。四种路径命名各不相同：<code>checkout</code>、<code>checkoutlink</code>、<code>qrlink</code>、<code>intent/create</code>。
+          </p>
+          <p class="node__src">router/{channel}/{channel}.go</p>
+        </li>
+
+        <li class="link"><div class="link__rule"></div></li>
+
+        <li class="node">
+          <p class="node__meta"><span class="kind">中间件</span><span class="kind kind--ok">Redis 缓存</span></p>
+          <h3 class="node__title">middleware.Auth</h3>
+          <p class="node__desc">
+            用 Client-ID 查 application 表校验 Basic Auth，结果缓存 30 分钟。webhook 路径和事件订阅路径在白名单里，不走这一步。
+          </p>
+          <p class="node__src">middleware/auth_middleware.go:51</p>
+        </li>
+
+        <li class="link"><div class="link__rule"></div></li>
+
+        <li class="node">
+          <p class="node__meta"><span class="kind">Handler</span></p>
+          <h3 class="node__title">参数校验</h3>
+          <p class="node__desc">
+            检查 success_url、line_item、order_id 非空。这段逻辑在五个渠道之间是复制粘贴的，微信那份漏了前两项校验。
+          </p>
+          <p class="node__src">biz/handler/{channel}/{channel}_handler.go</p>
+        </li>
+
+        <li class="link"><div class="link__rule"></div></li>
+
+        <li class="node">
+          <p class="node__meta"><span class="kind">Domain</span><span class="kind kind--ok">幂等</span></p>
+          <h3 class="node__title">payment.PreProcessFlow</h3>
+          <p class="node__desc">
+            先按 (user_id, order_id, channel) 查已有订单——命中且未过期就直接返回原支付链接，不再调第三方。否则按渠道 switch 定目标币种和过期时间，支付宝和微信在这里会调汇率服务换成 CNY。
+          </p>
+          <p class="node__src">biz/domain/payment/payment.go:56 · calculate.go:26</p>
+        </li>
+
+        <li class="link"><div class="link__rule"></div></li>
+
+        <li class="node">
+          <p class="node__meta"><span class="kind kind--ext">第三方</span></p>
+          <h3 class="node__title">adapter.{channel} 建单</h3>
+          <p class="node__desc">
+            调渠道 SDK 拿支付链接或二维码。五个渠道五种形态：三个是包级函数、一个是 Client 结构体、一个是单例，没有统一接口。
+          </p>
+          <p class="node__src">biz/adapter/{channel}/</p>
+        </li>
+
+        <li class="link"><div class="link__rule"></div></li>
+
+        <li class="node node--exit">
+          <p class="node__meta"><span class="kind">DB</span><span class="kind kind--ok">事务</span></p>
+          <h3 class="node__title">EndProcessFlow → CreateOrderFrom{Channel}</h3>
+          <p class="node__desc">
+            写 order 表，状态 WaitingPayment，落原币/目标币金额和汇率快照。六个 CreateOrderFrom 函数是同一段代码复制六份。
+          </p>
+          <p class="node__src">biz/dal/order_dao.go:189–375</p>
+        </li>
+
+        <li class="link link--async">
+          <div class="link__rule"></div>
+          <span class="link__tag">go func() · 跨事务</span>
+          <div class="link__rule"></div>
+        </li>
+
+        <li class="node">
+          <p class="node__meta"><span class="kind kind--warn">异步</span></p>
+          <h3 class="node__title">FirstBatchPublish(WaitingPayment)</h3>
+          <p class="node__desc">
+            用裸 goroutine 发出第一条事件，用的还是会被取消的请求 context。订单已经落库、接口已经返回成功，这条事件发没发出去没人检查。
+          </p>
+          <p class="node__src">biz/domain/payment/payment.go:185</p>
+        </li>
+      </ol>
+    </section>
+
+    <!-- ============ ACT 2 ============ -->
+    <section class="act">
+      <div class="act__head">
+        <p class="eyebrow">第二段</p>
+        <h2 class="act__title">回流：支付结果怎么被系统知道</h2>
+        <p class="act__lede">
+          两条通道并存，而且互相不知道对方存在。它们最终写同一条订单记录，没有任何互斥或状态守卫。
+        </p>
+      </div>
+
+      <div class="branch">
+        <div class="branch__arm">
+          <p class="branch__label">通道 A · 渠道回调</p>
+          <ol class="flow">
+            <li class="node node--entry">
+              <p class="node__meta"><span class="kind kind--ext">入站</span><span class="kind kind--warn">免认证</span></p>
+              <h3 class="node__title">POST /payment/{channel}/webhook</h3>
+              <p class="node__desc">
+                在 Auth 白名单里，所以验签是唯一防线。只有 Stripe、Airwallex、微信真的验了签。
+              </p>
+              <p class="node__src">middleware/auth_middleware.go:32–36</p>
+            </li>
+
+            <li class="link"><div class="link__rule"></div></li>
+
+            <li class="node node--hazard">
+              <p class="node__meta"><span class="kind kind--risk">实现不齐</span></p>
+              <h3 class="node__title">各渠道自行处理</h3>
+              <p class="node__desc">
+                Stripe 同步处理；Airwallex 投 Kafka 异步消费；微信验签后只落库不改订单；UseePay 是空实现，打一行日志就返回成功。
+              </p>
+              <p class="node__src">biz/handler/{channel}/service/</p>
+            </li>
+          </ol>
+        </div>
+
+        <div class="branch__arm">
+          <p class="branch__label">通道 B · 定时轮询</p>
+          <ol class="flow">
+            <li class="node node--entry">
+              <p class="node__meta"><span class="kind">Cron</span><span class="kind kind--ok">Redis 锁</span></p>
+              <h3 class="node__title">OrderTask · 每 5 秒</h3>
+              <p class="node__desc">
+                redislock 抢锁防多实例重复，带 watchdog 续约。抢不到锁时静默返回，没有日志也没有指标。
+              </p>
+              <p class="node__src">biz/cronjob/cronjob.go:25 · lockjob.go:34</p>
+            </li>
+
+            <li class="link"><div class="link__rule"></div></li>
+
+            <li class="node node--hazard">
+              <p class="node__meta"><span class="kind kind--risk">无分页</span></p>
+              <h3 class="node__title">ListOrderNotSuccess → 逐个查渠道</h3>
+              <p class="node__desc">
+                一次捞出所有非终态订单，串行调第三方接口。单轮耗时超过 5 秒就开始堆积。支付宝和 UseePay 只有这一条通道。
+              </p>
+              <p class="node__src">biz/dal/order_dao.go:39 · cronjob/order_task/task.go:16</p>
+            </li>
+          </ol>
+        </div>
+      </div>
+
+      <div class="branch__yoke"></div>
+
+      <ol class="flow">
+        <li class="node node--hazard">
+          <p class="node__meta"><span class="kind kind--risk">无守卫</span><span class="kind">DB</span></p>
+          <h3 class="node__title">order.Status 直接赋值 → UpdateOrder</h3>
+          <p class="node__desc">
+            全仓库十处裸赋值，没有合法迁移表，没有乐观锁，UpdateOrder 是无条件更新。乱序回调或两条通道并发时，已成功的订单可能被改回待付款。
+          </p>
+          <p class="node__src">biz/consts/order_consts.go:24 · biz/dal/order_dao.go:180</p>
+        </li>
+      </ol>
+    </section>
+
+    <!-- ============ CHANNEL MATRIX ============ -->
+    <section class="act">
+      <div class="act__head">
+        <p class="eyebrow">渠道对照</p>
+        <h2 class="act__title">五个渠道，五种成熟度</h2>
+        <p class="act__lede">
+          同一个"聚合支付"的名义下，各渠道拿到的实际保障差异很大。
+        </p>
+      </div>
+
+      <div class="scroller">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">渠道</th>
+              <th scope="col">收单方式</th>
+              <th scope="col">回调</th>
+              <th scope="col">验签</th>
+              <th scope="col">轮询兜底</th>
+              <th scope="col">事件去重</th>
+              <th scope="col">备注</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="chan">Stripe</td>
+              <td>Checkout Session</td>
+              <td><span class="pill pill--ok">有</span></td>
+              <td><span class="pill pill--ok">官方 SDK</span></td>
+              <td><span class="pill pill--ok">有</span></td>
+              <td><span class="pill pill--warn">仅订阅</span></td>
+              <td>唯一支持订阅、发票、退款的渠道</td>
+            </tr>
+            <tr>
+              <td class="chan">Airwallex</td>
+              <td>PaymentIntent</td>
+              <td><span class="pill pill--ok">有</span></td>
+              <td><span class="pill pill--ok">HMAC + 时间戳</span></td>
+              <td><span class="pill pill--risk">无</span></td>
+              <td><span class="pill pill--ok">有</span></td>
+              <td>轮询分支被注释掉了，回调丢了就永远卡住</td>
+            </tr>
+            <tr>
+              <td class="chan">微信支付</td>
+              <td>Native 扫码</td>
+              <td><span class="pill pill--warn">只落库</span></td>
+              <td><span class="pill pill--ok">官方 SDK</span></td>
+              <td><span class="pill pill--ok">有</span></td>
+              <td><span class="pill pill--none">—</span></td>
+              <td>验签后不更新订单，实际靠轮询；context 跨 goroutine 传递</td>
+            </tr>
+            <tr>
+              <td class="chan">支付宝</td>
+              <td>预下单二维码 / H5</td>
+              <td><span class="pill pill--risk">无路由</span></td>
+              <td><span class="pill pill--none">不适用</span></td>
+              <td><span class="pill pill--ok">有</span></td>
+              <td><span class="pill pill--none">—</span></td>
+              <td>notify_url 被注释掉，纯轮询；40004 判断过粗</td>
+            </tr>
+            <tr>
+              <td class="chan">UseePay</td>
+              <td>收银台链接</td>
+              <td><span class="pill pill--risk">空实现</span></td>
+              <td><span class="pill pill--risk">无</span></td>
+              <td><span class="pill pill--ok">有</span></td>
+              <td><span class="pill pill--none">—</span></td>
+              <td>webhook 路由免认证且无验签，等于完全无保护</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============ ACT 3 ============ -->
+    <section class="act">
+      <div class="act__head">
+        <p class="eyebrow">第三段</p>
+        <h2 class="act__title">通知：把结果送回业务方</h2>
+        <p class="act__lede">
+          这一段有 Kafka、有重试任务、有状态机，看起来最完整，实际上是三段里最容易丢消息的。
+        </p>
+      </div>
+
+      <ol class="flow">
+        <li class="node node--entry">
+          <p class="node__meta"><span class="kind">Domain</span><span class="kind kind--warn">跨事务</span></p>
+          <h3 class="node__title">FirstBatchPublish</h3>
+          <p class="node__desc">
+            同时写两张表：async_tasks 置 SCHEDULED，event_producer 记一条日志。两次写入和上游的订单更新不在同一个事务里。
+          </p>
+          <p class="node__src">biz/domain/events/producer.go:79</p>
+        </li>
+
+        <li class="link link--async">
+          <div class="link__rule"></div>
+          <span class="link__tag">分区键 = order_id</span>
+          <div class="link__rule"></div>
+        </li>
+
+        <li class="node">
+          <p class="node__meta"><span class="kind">Kafka</span></p>
+          <h3 class="node__title">watermill publish → consume</h3>
+          <p class="node__desc">
+            同订单有序。但消费端是 1 秒自动提交 offset 且从最早位点开始，重启或重平衡会重放。
+          </p>
+          <p class="node__src">biz/adapter/async_task/publisher · subscriber</p>
+        </li>
+
+        <li class="link link--broken">
+          <div class="link__rule"></div>
+          <span class="link__tag">断点 · 幂等守卫失效</span>
+          <div class="link__rule"></div>
+        </li>
+
+        <li class="node node--hazard">
+          <p class="node__meta"><span class="kind kind--risk">重复执行</span></p>
+          <h3 class="node__title">HandleEvent 状态检查</h3>
+          <p class="node__desc">
+            "任务不是 SCHEDULED 就跳过"这句 return 只退出了事务闭包，函数继续往下执行 handler。而且事务的返回值根本没被接收。所以 Kafka 一重放，业务逻辑就重跑一次。
+          </p>
+          <p class="node__src">biz/adapter/async_task/handler/base.go:50–79</p>
+        </li>
+
+        <li class="link"><div class="link__rule"></div></li>
+
+        <li class="node">
+          <p class="node__meta"><span class="kind">DB</span></p>
+          <h3 class="node__title">查 subscribe 表拿商户回调地址</h3>
+          <p class="node__desc">
+            一个 client_id 对应一个 domain。这张表可以被任何人未认证修改——订阅相关的四个接口都在 Auth 白名单里，client_id 取自请求体。
+          </p>
+          <p class="node__src">biz/domain/events/consumer.go:17</p>
+        </li>
+
+        <li class="link"><div class="link__rule"></div></li>
+
+        <li class="node node--hazard">
+          <p class="node__meta"><span class="kind kind--ext">出站</span><span class="kind kind--risk">无签名</span></p>
+          <h3 class="node__title">HTTP POST 到商户域名</h3>
+          <p class="node__desc">
+            裸 POST，没有 HMAC、没有时间戳、没有 event_id。商户无法验证这条通知是不是真的来自支付中台。
+          </p>
+          <p class="node__src">biz/adapter/https/https_v2.go:15</p>
+        </li>
+
+        <li class="link link--broken">
+          <div class="link__rule"></div>
+          <span class="link__tag">断点 · 返回值被丢弃</span>
+          <div class="link__rule"></div>
+        </li>
+
+        <li class="node node--hazard">
+          <p class="node__meta"><span class="kind kind--risk">永久丢失</span></p>
+          <h3 class="node__title">CalbackPublishHandler 恒返回 nil</h3>
+          <p class="node__desc">
+            PushEvent 的错误被直接丢掉，任务随即被标记为 FINISHED。商户接口超时或返回 500，这条事件就消失了——而且推送失败时连 event_consumer 的历史记录都不会写，事后无从追查。
+          </p>
+          <p class="node__src">biz/adapter/async_task/handler/callback_handler.go:21</p>
+        </li>
+      </ol>
+    </section>
+
+    <!-- ============ WALLET ============ -->
+    <section class="act">
+      <div class="act__head">
+        <p class="eyebrow">链路之外</p>
+        <h2 class="act__title">钱包是一座孤岛</h2>
+        <p class="act__lede">
+          理解钱包最关键的一点：支付回调路径上没有任何一处调用它。资金流转的判断在上游业务方，钱包只负责按指令记账。
+        </p>
+      </div>
+
+      <div class="island">
+        <div class="island__grid">
+          <div class="bucket">
+            <p class="bucket__name">available_balance</p>
+            <p class="bucket__note">可用余额。收款入账、余额支付、结算解冻都落在这里。</p>
+          </div>
+          <div class="bucket">
+            <p class="bucket__name">unsettled_balance</p>
+            <p class="bucket__note">待结算。供应商分账先进这个桶，结算后才释放。</p>
+          </div>
+          <div class="bucket">
+            <p class="bucket__name">withdrawing_balance</p>
+            <p class="bucket__note">提现处理中。申请时从可用搬进来，完成或失败时销账。</p>
+          </div>
+        </div>
+
+        <p class="prose">
+          对外只有三个接口，写入口只有 <code>POST /payment/wallet/transaction/submit</code> 一个，靠 <code>business_type</code>
+          分发到九个处理器，每一种就是一组固定的桶间流转。并发控制是<strong>悲观锁加乐观锁双保险</strong>：
+          <code>SELECT … FOR UPDATE NOWAIT</code> 拿行，内存里算余额并校验充足性，再用 <code>WHERE version = ?</code> 提交。
+          余额和流水在同一个事务里写，每条流水都带变动前后余额和账户快照。
+        </p>
+
+        <p class="prose">
+          设计思路是内行的，但落地有三个洞：余额更新的 UPDATE 语句<strong>缺主键条件</strong>，会命中所有同 version 的行；
+          金额<strong>不校验正负</strong>，传负数能绕过余额检查反向加钱；<strong>没有任何对账任务</strong>，
+          账被写坏了也没有机制能发现。另外钱包只按 (owner, platform) 定位，没有 client_id 列——目前是跨商户共享命名空间的。
+        </p>
+      </div>
+    </section>
+
+    <!-- ============ GAPS ============ -->
+    <section class="act">
+      <div class="act__head">
+        <p class="eyebrow">断点清单</p>
+        <h2 class="act__title">链路上真正会丢钱的地方</h2>
+        <p class="act__lede">
+          按修复优先级排列。前三条都是一到两行的改动。
+        </p>
+      </div>
+
+      <ol class="gaps">
+        <li class="gap">
+          <div class="gap__body">
+            <h3 class="gap__title">出站通知失败即永久丢失</h3>
+            <p class="gap__desc">
+              把 PushEvent 的错误返回出去，失败任务才能进入既有的重试链路。现在它被丢弃了，整套 Kafka 重试机制对这条最关键的路径完全没生效。
+            </p>
+            <p class="gap__src">biz/adapter/async_task/handler/callback_handler.go:21</p>
+          </div>
+        </li>
+
+        <li class="gap">
+          <div class="gap__body">
+            <h3 class="gap__title">钱包余额更新缺主键条件</h3>
+            <p class="gap__desc">
+              gorm gen 的 Updates 不会自动补主键，传入的 Model 是空实例。补上 <code>Where(ID.Eq(…))</code> 即可。不修的话，只要库里有第二个钱包的 version 相同，这条语句就会命中多行。
+            </p>
+            <p class="gap__src">biz/dal/wallet_account_dao.go:78</p>
+          </div>
+        </li>
+
+        <li class="gap">
+          <div class="gap__body">
+            <h3 class="gap__title">金额未校验正负</h3>
+            <p class="gap__desc">
+              扣减分支写的是"余额小于金额就报错"，金额为负时这个条件永远不成立，接着做减负数等于加钱。IDL 里没有校验标注，handler 层也没检查。
+            </p>
+            <p class="gap__src">biz/domain/wallet/wallet.go:152 · idl/wallet.thrift:82</p>
+          </div>
+        </li>
+
+        <li class="gap">
+          <div class="gap__body">
+            <h3 class="gap__title">异步任务幂等守卫失效</h3>
+            <p class="gap__desc">
+              状态检查的 return 只跳出了闭包。把检查结果传出事务再决定是否提前返回，Kafka 重放才不会重复执行业务逻辑。
+            </p>
+            <p class="gap__src">biz/adapter/async_task/handler/base.go:50</p>
+          </div>
+        </li>
+
+        <li class="gap">
+          <div class="gap__body">
+            <h3 class="gap__title">订单状态没有迁移守卫</h3>
+            <p class="gap__desc">
+              改成带前置状态条件的 CAS 更新，才能挡住乱序回调和"轮询与回调并发"造成的状态回退。
+            </p>
+            <p class="gap__src">biz/dal/order_dao.go:180</p>
+          </div>
+        </li>
+
+        <li class="gap">
+          <div class="gap__body">
+            <h3 class="gap__title">event_producer 不是真正的 outbox</h3>
+            <p class="gap__desc">
+              这张表只写不读，扫描和重推的方法零调用方。把"改订单状态 + 写 outbox"放进同一个事务、由后台任务补投，才能去掉那些裸 goroutine。
+            </p>
+            <p class="gap__src">biz/dal/event_producer_dao.go:45–54</p>
+          </div>
+        </li>
+      </ol>
+    </section>
+
+    <p class="colophon">
+      依据 main 分支工作树静态分析绘制 · 所有引用位置均经源码复核<br>
+      线型与配色编码链路质量，不代表模块重要性
+    </p>
+
+  </div>
+</div>
+</body>
+</html>
