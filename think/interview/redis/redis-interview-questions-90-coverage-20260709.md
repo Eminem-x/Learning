@@ -13,13 +13,15 @@ Redis 面试就九条主线：
 
 1. **数据结构**：5 基础（String/List/Hash/Set/ZSet）+ 4 扩展（Bitmap/HyperLogLog/GEO/Stream）；每种类型底层有**两套编码**，小数据用紧凑编码（ziplist/listpack/intset），大了转标准结构（hashtable/skiplist/quicklist）。ZSet = **跳表 + 哈希表**双结构。
 2. **单线程模型**：命令执行单线程（避免锁、无竞态），靠 **I/O 多路复用（epoll）** 扛并发；6.0 起 **I/O 多线程**只并行「读网络/解析/回写」，命令执行仍单线程。快的根因：纯内存 + 高效数据结构 + 单线程无锁 + 多路复用。
-3. **持久化**：**RDB**（内存快照、二进制紧凑、恢复快、会丢数据）、**AOF**（命令追加日志、更安全、文件大、恢复慢）、**混合持久化**（RDB 全量 + AOF 增量，7.x 默认推荐）。`fork` + COW 是 RDB/AOF rewrite 的共同机制。
+3. **持久化**：**RDB（Redis DataBase，内存快照文件 `dump.rdb`）**——二进制紧凑、恢复快、会丢数据；**AOF（Append Only File，只追加文件）**——命令追加日志、更安全、文件大、恢复慢；**混合持久化**（RDB 全量 + AOF 增量，7.x 默认推荐）。`fork` + COW 是 RDB / AOF rewrite 的共同机制。
 4. **过期删除**：**惰性删除**（访问时才删）+ **定期删除**（周期抽样删）双管；过期 key 不保证被立即清，靠内存淘汰兜底。
-5. **内存淘汰**：`maxmemory` 到顶后按 8 种策略淘汰，主力是 **allkeys-lru / allkeys-lfu / volatile-ttl**；LRU 是近似 LRU（随机采样），LFU 带访问频率 + 时间衰减。
+5. **内存淘汰**：`maxmemory` 到顶后按 8 种策略淘汰，主力是 **allkeys-lru / allkeys-lfu / volatile-ttl**；**LRU（Least Recently Used，最近最少使用）** 是近似 LRU（随机采样），**LFU（Least Frequently Used，最不经常使用）** 带访问频率 + 时间衰减。
 6. **缓存三大问题**：穿透（查不存在的 key → 布隆过滤器/缓存空值）、击穿（热点 key 过期瞬间 → 互斥锁/逻辑过期/不过期）、雪崩（大量 key 同时过期或宕机 → 过期时间加随机 + 多级缓存 + 高可用）。
 7. **缓存一致性**：更新策略选 **Cache-Aside + 先更新 DB 再删缓存（延迟双删兜底）**；根因是「双写无法原子」，只能做到最终一致。
 8. **分布式锁**：`SET key val NX PX ttl` + **唯一值 + Lua 原子释放**；进阶看门狗续期（Redisson）、Redlock 多节点（有争议）。
 9. **高可用**：**主从复制**（读写分离、数据冗余）→ **Sentinel**（哨兵，自动故障转移，不解决容量）→ **Cluster**（分片，16384 槽，解决容量 + 高可用）。
+
+**外加一个必须张口就来的数量级**：单实例简单命令 **~10 万 QPS**（小 value、无 pipeline），开 pipeline 到几十万；瓶颈是**单核主频 + 网卡带宽**（`带宽 ≈ QPS × value 大小`，1KB value 打 10 万 QPS 就要 100MB/s，千兆网卡直接满）。详见 Q37。
 
 卡在哪一条，就往对应章节回挖。
 
@@ -130,7 +132,12 @@ ZSet 大数据量时底层是 **skiplist + dict（哈希表）** 双结构，同
 
 ### Q11. RDB vs AOF 对比？
 
-| | RDB | AOF |
+> **先记英文全称（名字本身就是答案的一半）**：
+> - **RDB = Redis DataBase**，落地文件默认叫 `dump.rdb`。记忆锚：**「Dump 一次数据库」= 快照**。命令也自带这层含义——`SAVE` / `BGSAVE`（**BG** = BackGround，后台 fork 子进程做）。
+> - **AOF = Append Only File**，「**只追加**文件」。名字直接说明了机制：**只在文件尾巴 append 写命令，从不修改已有内容**（顺序写才快，也才安全）。配置项同源：`appendonly yes`、`appendfsync`、`BGREWRITEAOF`（**REWRITE** = 重写压缩）。
+> - 一句话对照记：**RDB 存「现在长什么样」（状态 / state），AOF 存「怎么变成这样的」（过程 / journal）。** 这组「快照 vs 日志」的对立贯穿整个存储领域——MySQL 的 checkpoint 页 vs redo log、etcd 的 snapshot vs WAL、HDFS 的 FsImage vs EditLog，全是同一个模式（见能力地图格 7）。
+
+| | RDB（Redis DataBase） | AOF（Append Only File） |
 |--|-----|-----|
 | **本质** | 内存**快照**（某时刻全量二进制） | **命令追加日志**（记录每条写命令） |
 | **文件** | 紧凑二进制，小 | 文本命令，大 |
@@ -142,7 +149,7 @@ ZSet 大数据量时底层是 **skiplist + dict（哈希表）** 双结构，同
 
 ### Q12. AOF 的三种 fsync 策略？重写（rewrite）是什么？
 
-**`appendfsync` 三档**：
+**`appendfsync`（append + **fsync** = file synchronize，把 OS page cache 真正刷到磁盘）三档**：
 - `always`：每条命令都 fsync，最安全、最慢。
 - `everysec`（默认）：每秒 fsync 一次，宕机最多丢 1s，性能与安全平衡。
 - `no`：交给 OS（一般 30s），最快最不安全。
@@ -226,11 +233,211 @@ ZSet 大数据量时底层是 **skiplist + dict（哈希表）** 双结构，同
 | **Write-Through（写穿透）** | 同 Read-Through | 应用**只写缓存**，缓存组件**同步**把数据写进 DB（缓存、DB 一起更新） | **强一致**（缓存永远和 DB 同步）；但每次写**两跳、延迟高**；宕机不丢（DB 已同步落） |
 | **Write-Behind / Write-Back（写回/异步写）** | 同上 | 应用**只写缓存立即返回**，缓存**异步批量**刷回 DB | **写极快 + 可合并写**；但**宕机丢数据、一致性弱**。OS page cache、MySQL buffer pool 刷脏页、Redis AOF 缓冲都是这个思路 |
 
-**几个必答的辨析（经典 case）**：
+---
 
-- **Write-Through vs Cache-Aside 的写**：Write-Through 是「写缓存 → 缓存同步写库」，缓存**始终有最新值**；Cache-Aside 是「写库 → **删**缓存」，下次读再回填，缓存写完短暂为空。前者读命中率高、一致性强，代价是写慢、且写了不一定被读（浪费）。
-- **Write-Through vs Write-Behind**：唯一区别是**同步还是异步落库**。同步 = 强一致 + 慢；异步 = 快 + 可能丢（进程/机器宕机时缓存里没刷的数据没了）。Write-Behind 靠「攒批 + 合并」把 N 次写压成 1 次落库，写密集场景吞吐高。
-- **为什么 Redis 场景几乎只用 Cache-Aside**：Read/Write-Through 要求缓存层「认识」数据源、能自己回源/回写，而 **Redis 是独立缓存，不知道你的 MySQL 长什么样**——回源和落库逻辑只能写在应用里，那本质就是 Cache-Aside。Write-Through/Behind 更多出现在**本地缓存框架**（Caffeine/Ehcache/Spring Cache 抽象）或**自带缓存的存储**（DynamoDB DAX）里。面试若问「Redis 用哪种」，答 **Cache-Aside**，再补一句「Write-Through/Behind 需要缓存组件感知数据源，Redis 独立部署时不具备」。
+#### ⭐ 先抓住唯一的分界线：**「谁在调用 DB」**
+
+四种模式的名字都很唬人，但**只要盯住「DB 这一跳是谁发起的」，四种立刻泾渭分明**：
+
+```
+Cache-Aside（旁路）                Read/Write-Through（穿透）
+  应用是「总指挥」                    缓存是「代理人」
+
+   ┌───────────┐                    ┌───────────┐
+   │    App    │                    │    App    │      ← 应用眼里只有缓存
+   └─┬───────┬─┘                    └─────┬─────┘        它根本不知道 DB 存在
+     │       │                            │
+   查缓存   查/写 DB                     只和缓存说话
+     │       │                            │
+   ┌─▼──┐ ┌─▼──┐                     ┌────▼────┐
+   │Cache│ │ DB │                    │  Cache  │  ← 缓存组件自己
+   └────┘ └────┘                     └────┬────┘     持有 DB 的读写逻辑
+                                          │  (loader / writer)
+  缓存 ↮ DB 互不相识                   ┌───▼───┐
+  「旁路 aside」= 缓存在主链路旁边      │  DB   │
+                                      └───────┘
+                                   「穿透 through」= 请求穿过缓存到达 DB
+```
+
+- **aside（在旁边）**：缓存是挂在应用旁边的一个**独立组件**，应用自己两头跑。
+- **through（穿过）**：应用的请求**穿过**缓存这一层落到 DB —— 应用**只有一个下游**，就是缓存。
+
+> 这就是为什么中文把 Read-Through 译成「读穿透」，和「缓存穿透（cache penetration，指查不存在的 key）」是**完全不同的两个词**，别混。面试里说到 Through 系列，建议直接说英文。
+
+---
+
+#### ① Read-Through（读穿透）——把「回源」收进缓存组件
+
+**Cache-Aside 的读，代码长这样（回源逻辑写在业务里）**：
+
+```go
+func GetUser(id int64) (*User, error) {
+    // ① 应用查缓存
+    if v, err := rdb.Get(ctx, key(id)).Result(); err == nil {
+        return decode(v), nil
+    }
+    // ② miss：应用自己查 DB
+    u, err := db.QueryUser(id)
+    if err != nil { return nil, err }
+    // ③ 应用自己回填缓存
+    rdb.Set(ctx, key(id), encode(u), 10*time.Minute)
+    return u, nil
+}
+```
+
+**Read-Through 的读，代码长这样（回源逻辑注册给缓存）**：
+
+```go
+// 初始化时把「怎么回源」一次性告诉缓存组件
+cache := NewLoadingCache(LoaderFunc(func(id int64) (*User, error) {
+    return db.QueryUser(id)          // ← 唯一一次写 DB 访问逻辑
+}), WithTTL(10*time.Minute))
+
+// 业务代码从此只剩一行，看不到 DB
+func GetUser(id int64) (*User, error) {
+    return cache.Get(id)             // miss 时缓存自己去 loader 取并回填
+}
+```
+
+**它到底解决了什么？**（别背定义，记这三条收益）
+
+1. **回源逻辑收敛到一处**：Cache-Aside 下，同一份数据被 20 个地方读，就有 20 份「查缓存 → miss → 查库 → 回填」的样板代码，任何一处漏了回填或 TTL 写错就是线上坑。Read-Through 把它收进一个 loader。
+2. **天然防击穿**：成熟的 LoadingCache（Caffeine、Guava）保证**同一 key 并发 miss 时只有一个线程去回源**，其余线程等结果——这正是 Q18「击穿」里的**互斥锁方案**，只是被缓存组件内置了。Go 里用 `golang.org/x/sync/singleflight` 手搓等价物：
+   ```go
+   var sf singleflight.Group
+   v, err, _ := sf.Do(key, func() (any, error) { return db.QueryUser(id) })
+   // 同一 key 的并发调用被合并成一次 DB 查询，其余等待复用结果
+   ```
+   **面试亮点**：说出「Read-Through + singleflight 本质就是把缓存击穿的互斥重建做成了基础设施」，比只背「Read-Through 是缓存自己回源」高一档。
+3. **对应用透明**：换存储（MySQL → 另一个服务）只改 loader，业务代码零改动。
+
+**代价**：① 缓存组件必须「认识」数据源（要能拿到 DB 连接 / RPC client）；② 回源不可控（不能针对某个调用点做降级、超时定制，除非组件暴露参数）；③ 只能做**单 key** 语义，复杂查询（多表 join、分页列表）套不进 loader。
+
+**典型实现**：Java 的 Caffeine `LoadingCache` / Guava `CacheLoader` / Spring `@Cacheable`；AWS **DynamoDB DAX**（在存储侧就做了 Read/Write-Through）；Go 里没有主流开箱实现，一般用 `singleflight` + 自己封一层。
+
+---
+
+#### ② Write-Through（写穿透）——写缓存，缓存同步替你写库
+
+```
+App --write--> Cache --(同步)--> DB
+                 ↑                │
+                 └── 两个都成功才返回给 App ──┘
+```
+
+```go
+func (c *WriteThroughCache) Set(id int64, u *User) error {
+    // 缓存组件内部：先落 DB（持久化优先），成功后再更新自身
+    if err := c.db.UpdateUser(u); err != nil {
+        return err                       // DB 失败 → 整个写失败，缓存不动
+    }
+    c.local.Put(id, u)
+    return nil
+}
+// 业务代码：cache.Set(id, u)  —— 看不到 DB
+```
+
+**关键理解点（这几条才是面试真正想问的）**：
+
+- **「同步」同步在哪**：客户端的这次写请求，要**等 DB 也写完**才返回。所以 Write-Through **不快**——它的延迟 = 写缓存 + 写 DB，比直接写 DB 还慢一点。**它换来的不是性能，是「缓存永远是热的、且永远和 DB 一致」**。
+- **内部顺序必须是「先 DB 后缓存」**：如果先更缓存再写 DB，DB 失败时缓存里就是脏值（Q21 第二种组合的错误）。所以正确实现是「DB 成功才更新缓存」，此时缓存组件承担了 Cache-Aside 里应用要操心的那件事。
+- **和 Cache-Aside 的写的核心区别 —— 写完之后缓存里有没有值**：
+  | | Cache-Aside 写 | Write-Through 写 |
+  |--|--------------|-----------------|
+  | 动作 | 更新 DB → **删**缓存 | 写缓存 → 缓存**同步**写 DB（缓存留值） |
+  | 写完缓存状态 | **空**（下次读才回填） | **有最新值** |
+  | 下次读 | 一次 miss，要回源 | 直接命中 |
+  | 适合 | **写多读少**（写了未必被读，删掉更省事） | **写后马上会被读**（如订单状态、库存） |
+  | 风险 | 短暂空窗，读回填时可能写回旧值 | 写路径变长，写了没人读 = 白占内存 |
+
+  **一句话记**：Cache-Aside 是**失效（invalidate）**语义，Write-Through 是**更新（update）**语义。Q21 里「为什么不推荐先更 DB 再更缓存」的两个理由（并发乱序覆盖、写了浪费）——Write-Through 之所以能用「更新」语义，是因为**并发写被收敛到缓存组件内部串行化了**，业务代码里那种「两个线程各自更 DB 又各自更缓存、顺序反了」的乱序不会发生。
+
+- **宕机会丢吗**：不会。返回给客户端时 DB 已经落盘了，缓存只是副本，丢了重新回源就行。这点和下面的 Write-Behind 形成最锋利的对比。
+
+---
+
+#### ③ Write-Behind / Write-Back（写回 / 异步写）——写缓存就返回，后台攒批刷库
+
+```
+App --write--> Cache  ──立即返回 OK──> App
+                 │
+                 │ 后台线程：攒批 / 合并 / 定时
+                 ▼
+                DB      ← 几百 ms ~ 几十 s 之后才真正落库
+```
+
+```go
+// 极简示意：写只进内存 + 标脏，后台定时批量刷
+func (c *WriteBehindCache) Set(id int64, u *User) error {
+    c.local.Put(id, u)
+    c.dirty.Store(id, struct{}{})     // 标记为「待刷库」
+    return nil                        // ← 立刻返回，DB 还没动
+}
+
+func (c *WriteBehindCache) flushLoop() {
+    tick := time.NewTicker(1 * time.Second)
+    for range tick.C {
+        batch := c.drainDirty()                  // 取出这一秒攒下的所有脏 key
+        c.db.BatchUpsert(batch)                  // 合并成一次批量写
+    }
+}
+```
+
+**为什么它值得存在？两个收益，都很硬**：
+
+1. **写延迟 = 写内存**（微秒级），DB 的写入延迟被完全挡在客户端之外。
+2. **写合并（write coalescing）** —— 这才是杀手锏。同一个 key 在 1 秒内被改了 100 次，**只需要落库 1 次**（最终值）。DB 写入量从 100 降到 1，是**数量级**的削峰，不是百分比优化。
+
+**代价（面试必须主动说出来）**：
+
+- **宕机丢数据**：进程/机器挂了，内存里还没刷的脏数据全没。这是不可回避的**一致性 ↔ 性能**的直接交易。
+- **DB 里的数据是「过时的」**：任何绕过缓存直连 DB 的读（报表、离线 ETL、另一个服务）会读到旧值。**这是生产上最容易踩的坑**——你的数仓 T+1 抽数抽到的是没刷完的中间态。
+- **顺序 / 冲突**：批量刷时要保证同 key 只写最终值，且崩溃重启后的恢复语义要想清楚。
+
+**怎么补救丢数据**：不靠缓存本身，靠**先写一份顺序日志**再进内存——这正是 **AOF / redo log / WAL** 的活。所以：
+
+> **Write-Behind + WAL = 现代存储引擎的标准写路径。** 你已经在四个地方见过它了：
+> - **MySQL InnoDB**：改的是 buffer pool 里的页（内存），立即返回；脏页由后台线程异步刷盘。不丢是因为 **redo log 先落了**（WAL）。→ 见 [三大日志×ACID](../mysql/mysql-logs-lab/README.md)
+> - **Redis 自己**：`appendfsync everysec` —— 命令先进 AOF buffer 就返回，每秒才 fsync。**Redis 对自己的持久化用的就是 Write-Behind**（最多丢 1s，见 Q12）。
+> - **OS page cache**：`write()` 系统调用写完 page cache 就返回，内核后台回写磁盘；要强制落盘得自己调 `fsync`。
+> - **PG WAL**：同一个模式，见 [postgresql-wal-replication](../../infra/postgresql-wal-replication-and-amplification.md)。
+>
+> **把「Write-Behind」这个词和这四个场景绑在一起记 —— 它不是一个缓存冷知识，而是整个存储世界「用异步换吞吐、用日志换安全」的通用范式。**
+
+**你其实早就手写过 Write-Behind**（这是最好的记忆钩子）：
+
+> 「点赞数 / 播放量 / PV 计数」这个需求——`INCR` 打在 Redis 上立即返回，起一个定时任务每分钟把 Redis 里的计数批量写回 MySQL。**这就是一个手搓的 Write-Behind**：写内存立即返回、后台攒批合并、允许丢一分钟、DB 里的值永远滞后。
+> 面试时用这个例子作答，比复述定义有力得多；再补一句「我们能接受，是因为计数类数据丢几十条不影响业务；如果是订单金额就绝不能这么做」——直接把「什么场景能用」也答了。
+
+**Write-Behind 的适用判据（一句话筛选）**：**写极密集 + 同 key 高频重复写 + 能容忍秒级丢失**。计数器、埋点、状态心跳、排行榜 ✅；订单、支付、库存扣减 ❌。
+
+---
+
+#### 三种 Through 系列的横向对比（背这张就够）
+
+| | Read-Through | Write-Through | Write-Behind |
+|--|-------------|---------------|--------------|
+| **管的是** | 读路径 | 写路径 | 写路径 |
+| **DB 这一跳谁发起** | 缓存（miss 时） | 缓存（同步） | 缓存（异步、后台） |
+| **返回客户端时 DB 落了吗** | — | ✅ 落了 | ❌ 没落 |
+| **主要收益** | 回源收敛 + 天然防击穿 | 缓存永远热 + 强一致 | 写极快 + **写合并削峰** |
+| **主要代价** | 缓存需感知数据源 | 写延迟 = 缓存 + DB | **宕机丢数据 + DB 数据滞后** |
+| **典型实现** | Caffeine LoadingCache、DAX | Spring Cache `@CachePut`、DAX | InnoDB 脏页、Redis AOF everysec、OS page cache、手写计数刷库 |
+
+**Read-Through 和 Write-Through 通常成对出现**（一个管读、一个管写，都由同一个缓存组件代理 DB），所以文档里常写成 "Read/Write-Through"；Write-Behind 是 Write-Through 的**异步版**，两者只差「等不等 DB」这一件事。
+
+---
+
+#### 为什么 Redis 场景几乎只用 Cache-Aside？
+
+Read/Write-Through 要求缓存层「认识」数据源、能自己回源和落库，而 **Redis 是独立进程，它不知道你的 MySQL 长什么样**——回源和落库逻辑只能写在应用里，那本质就退化成 Cache-Aside 了。
+
+所以 Through 系列主要活在两个地方：
+
+1. **进程内缓存框架**：Caffeine / Guava / Ehcache / Spring Cache 抽象——它们和业务代码同进程，能直接持有 DAO。
+2. **自带缓存层的存储产品**：DynamoDB **DAX**、各类数据库的 buffer pool——缓存和存储本来就是一体的。
+
+**面试标准答法**：「Redis 用 **Cache-Aside**。Read/Write-Through 需要缓存组件感知数据源并代理读写，Redis 独立部署时不具备这个能力；但**我们其实在两个地方用到了 Through 的思想**——本地 Caffeine 做二级缓存时是 Read-Through，计数类数据 Redis 攒批回写 MySQL 时是手写的 Write-Behind。」把三个词都落到自己的实践上，这题就满分了。
 
 ### Q21. Cache-Aside 下缓存与数据库一致性怎么保证？先删缓存还是先更新库？
 
@@ -367,6 +574,206 @@ then return redis.call('del', KEYS[1]) else return 0 end
 - **排查**：`redis-cli --hotkeys`（需 LFU 策略）、`MONITOR`（慎用）、业务埋点。
 - **解决**：① **本地缓存**（多级缓存，热点在应用内存挡一层）；② **key 拆分/加随机后缀**打散到多节点（`hotkey_1`~`hotkey_N` 随机读）；③ 读写分离扩从库。
 
+> **别把两者混为一谈**：bigkey 是**空间**问题（一个 key 太胖 → 单命令阻塞 + 无法分片），hotkey 是**流量**问题（一个 key 太热 → 单节点被打爆）。**一个 key 可以既大又热**（爆款商品的大 Hash），这时两套解法要叠加用。下面先把 bigkey 里最常考的「大 Hash 怎么拆」展开。
+
+---
+
+#### 【展开】大 Hash 到底怎么拆？（最常被追问的落地题）
+
+**先讲清楚为什么大 Hash 特别危险**，这是所有拆法的出发点：
+
+1. **`HGETALL` 是 O(n) 且不可打断**：10 万 field 的 Hash 做一次 `HGETALL`，主线程要**连续**序列化 10 万个 field-value，期间**整个 Redis 停止服务**。这不是「慢一点」，是**全实例级的停顿**——同机所有业务一起抖。
+2. **网络放大**：一次返回几十 MB，客户端 output buffer 暴涨，可能触发 `client-output-buffer-limit` 被强制断连；连接一断客户端重试，再来一次 `HGETALL`，**形成雪崩闭环**。
+3. **删除卡顿**：`DEL` 一个大 Hash 要一次性 free 掉几万个对象，同样阻塞主线程（这正是 `UNLINK` 存在的理由）。
+4. **Cluster 里无法均衡**：**槽是迁移的最小单位，而一个 key 永远只属于一个槽**。一个 5GB 的 Hash 意味着这 5GB 被钉死在一个节点上，**加再多分片也摊不平**；`cluster reshard` 迁到它时会长时间卡住（迁移单 key 是同步阻塞的）。
+5. **持久化 / 复制放大**：大 key 的每次改动都要在主从间传播，全量同步时也是一整块。
+
+> **一句话抓本质**：Redis 的**并发单位是「命令」，均衡单位是「key」**。大 key 同时破坏这两者——命令粒度太粗导致阻塞，key 粒度太粗导致无法分片。**拆分的目的就是把粒度降回来。**
+
+---
+
+**拆法一：纵向拆（按业务语义拆，优先考虑）**
+
+先别急着上哈希算法。**80% 的大 Hash 是「什么都往里塞」塞出来的**，按访问模式拆开往往最优：
+
+```
+拆前：user:1000  →  { name, age, avatar, ..., 行为埋点 x 5000 个 field }
+
+拆后：user:1000:profile   → { name, age, avatar }        # 小、热、几乎全量读
+     user:1000:counters  → { pv, likes, follows }        # 小、写频繁
+     user:1000:events    → 根本不该放 Redis，进 ZSet/Stream 或直接落 ES/HDFS
+```
+
+**为什么优先**：拆完之后**读的时候只读需要的那部分**——`HGETALL user:1000:profile` 只传 3 个 field。而哈希分桶拆法，如果业务本来就要全量读，你还是得读 N 个桶，总传输量没降。
+
+**判断口诀**：先问「**这个 Hash 里的 field 是不是总被一起读？**」
+- **不是** → 纵向拆（按访问模式分组），收益最大。
+- **是**（真的需要全量语义）→ 才走下面的横向分桶。
+- **另外一问**：「**这些数据真的该放 Redis 吗？**」明细流水、日志、大列表本来就该在 ES / HDFS / MySQL，Redis 只放「热的、小的、要快的」。你的 ETL 链路里 Redis 更适合放**维表 / 去重集合 / 进度水位**，不是明细。
+
+---
+
+**拆法二：横向分桶（哈希分片，需要全量语义时用）**
+
+把一个大 Hash 按 field 哈希打散成 N 个小 Hash：
+
+```
+原来： bigkey                        →  { f1: v1, f2: v2, ..., f100000: v100000 }
+拆后： bigkey:0, bigkey:1, ..., bigkey:99   每个约 1000 个 field
+       落哪个桶： bucket = crc32(field) % N
+```
+
+**关键：N 怎么定？** 反推——**让每个桶回到「小到既安全、又能吃到 listpack 编码」的区间**：
+
+- 单桶 field 数目标 **≤ 500~1000**（`HGETALL` 一个桶只需微秒级，不会明显阻塞）。
+- 如果能压到 **`hash-max-listpack-entries`（默认 128）且每个 value ≤ 64 字节以内**，桶会用 **listpack 编码**，内存还能再省一大截（见 Q2）——但注意 listpack 的 `HGET` 是 O(桶内 field 数) 的线性扫描，128 以内可以忽略，**别为了省内存把阈值调到几千，那是拿 CPU 换内存**。
+- `N = 总 field 数 / 目标单桶大小`，然后**取一个不会再变的固定值**（见下面的「坑」）。
+
+**Go 实现**：
+
+```go
+const shardNum = 100   // ⚠️ 一旦上线就不能改，见下方「最大的坑」
+
+func shardKey(bizKey, field string) string {
+    idx := crc32.ChecksumIEEE([]byte(field)) % shardNum
+    return fmt.Sprintf("%s:%d", bizKey, idx)
+}
+
+// 单 field 读写：和拆分前一样是 O(1)，只多了一次本地哈希计算
+func HGet(ctx context.Context, rdb *redis.Client, bizKey, field string) (string, error) {
+    return rdb.HGet(ctx, shardKey(bizKey, field), field).Result()
+}
+
+func HSet(ctx context.Context, rdb *redis.Client, bizKey, field, val string) error {
+    return rdb.HSet(ctx, shardKey(bizKey, field), field, val).Err()
+}
+
+// 批量读：按桶归组，用 Pipeline 一次发出去（N 次 HMGET 但只有 1 个 RTT）
+func HMGet(ctx context.Context, rdb *redis.Client, bizKey string, fields []string) (map[string]string, error) {
+    grouped := make(map[string][]string)          // shardKey -> 该桶下的 fields
+    for _, f := range fields {
+        sk := shardKey(bizKey, f)
+        grouped[sk] = append(grouped[sk], f)
+    }
+    pipe := rdb.Pipeline()
+    cmds := make(map[string]*redis.SliceCmd, len(grouped))
+    for sk, fs := range grouped {
+        cmds[sk] = pipe.HMGet(ctx, sk, fs...)
+    }
+    if _, err := pipe.Exec(ctx); err != nil && err != redis.Nil {
+        return nil, err
+    }
+    out := make(map[string]string, len(fields))
+    for sk, cmd := range cmds {
+        vals, _ := cmd.Result()
+        for i, v := range vals {
+            if v != nil { out[grouped[sk][i]] = v.(string) }
+        }
+    }
+    return out, nil
+}
+
+// 全量读：不再有 HGETALL，改成遍历所有桶（Pipeline 批量，避免 N 次 RTT）
+func HGetAll(ctx context.Context, rdb *redis.Client, bizKey string) (map[string]string, error) {
+    pipe := rdb.Pipeline()
+    cmds := make([]*redis.MapStringStringCmd, shardNum)
+    for i := 0; i < shardNum; i++ {
+        cmds[i] = pipe.HGetAll(ctx, fmt.Sprintf("%s:%d", bizKey, i))
+    }
+    if _, err := pipe.Exec(ctx); err != nil && err != redis.Nil {
+        return nil, err
+    }
+    out := make(map[string]string)
+    for _, c := range cmds {
+        for k, v := range c.Val() { out[k] = v }
+    }
+    return out, nil
+}
+```
+
+**拆完之后你失去了什么（必须主动答出来，这是成熟度的体现）**：
+
+| 能力 | 拆前 | 拆后 |
+|------|------|------|
+| `HGET` / `HSET` 单 field | O(1) 一跳 | O(1) 一跳（**无损**，只多算一次 crc32） |
+| `HGETALL` | 一条命令 | **N 条命令**，需 Pipeline 拼装 |
+| `HLEN` | O(1) | 要么累加 N 个桶，要么**自己维护一个计数器** |
+| `HSCAN` 遍历 | 一个游标 | N 个游标，逻辑复杂 |
+| 原子性 | 单 key 上多 field 天然原子 | 跨桶**不再原子**（Cluster 下跨槽还会直接报错） |
+| 过期 TTL | 一个 key 一次设置 | **N 个 key 都要设**，且要防止「部分过期」造成半残数据 |
+
+> **TTL 这条是最隐蔽的坑**：N 个桶各自过期，可能出现「桶 3 过期了、桶 7 还在」的**半残状态**，业务读出来是一份不完整的数据却以为是完整的。对策：① 全部桶设**同一个绝对过期时刻**（而非各自 `EX 3600`）；② 或者干脆不设 TTL，靠显式删除；③ 或者额外存一个「元 key」标记这份数据整体是否有效，读之前先校验。
+
+---
+
+**拆法三：打平成独立 String key（field 少但 value 大时）**
+
+```
+user:1000 (hash)  →  user:1000:name / user:1000:avatar / ...
+```
+
+- **优点**：粒度最细，天生可分片，每个 key 能单独设 TTL。
+- **缺点（必须知道）**：**key 数量暴涨，内存反而可能变大**。每个独立 key 都要付 dict entry + `redisObject` + SDS header + 过期字典项的开销，**每个 key 大约 50~100 字节固定成本**。原来一个 Hash 用 listpack 编码时，10 个 field 可能只占几百字节；打平成 10 个 String 就要上千字节。**field 数多的场景绝对不要用这招**——它是「化整为零」，不是「省内存」。
+
+---
+
+**拆法四：value 侧压缩 / 换序列化（不改结构，先榨一轮）**
+
+大 Hash 有时候不是 field 多，是**每个 value 都是一坨 JSON**。这时先别动结构：
+
+- JSON → **Protobuf / MessagePack**，通常省 30%~60%。
+- 再套 **snappy / zstd** 压缩，文本类还能再降一半（代价是客户端 CPU，Redis 侧零成本）。
+- 去掉冗余字段，短 field 名（`u` 代替 `user_name`——field 名本身也占内存，几万个 field 时不可忽略）。
+
+**这招应该最先试**，因为**零改造成本、零一致性风险**。压完还超标，再上拆分。
+
+---
+
+**Cluster 下的关键抉择：要不要加 hash tag？（高频追问）**
+
+拆成 `bigkey:0` ~ `bigkey:99` 之后，这些桶会被 CRC16 散到不同节点。要不要用 hash tag（Q28）把它们绑回同一个槽？
+
+| | 不加 tag（`bigkey:0`…） | 加 tag（`{bigkey}:0`…） |
+|--|----------------------|----------------------|
+| 桶的分布 | 散落在各节点 | **全部落同一个节点** |
+| 内存均衡 | ✅ 真正打散 | ❌ **没解决内存不均**，只是把一个大 key 变成同节点上的 100 个中 key |
+| 热点均衡 | ✅ 流量分散到多节点 | ❌ 热点仍集中 |
+| 批量读 | 跨节点，需客户端按节点分组 Pipeline | ✅ 同槽，可用 `MGET`/事务/Lua |
+| 原子性 | ❌ 无 | ✅ 可用 Lua 保证多桶原子 |
+
+**决策**：
+- 拆分的**首要目的是内存/热点均衡** → **不要加 tag**。加了 tag 等于白拆，只解决了「单命令阻塞」，没解决「单节点扛不住」。
+- 只有当**必须跨桶原子操作**（比如要保证多个 field 一起更新）时才加 tag，并接受「均衡收益归零」。
+- go-redis 的 `ClusterClient` 在 Pipeline 时会**自动按节点分组**发送，所以不加 tag 的批量读并不难写——这一点可以直接答出来。
+
+---
+
+**上线怎么平滑迁移？（问「怎么改造存量」时答这个）**
+
+```
+① 双写：新逻辑同时写老大 key 和新分桶（开关控制），保证新数据两边都有
+② 存量搬迁：用 HSCAN 游标分批（COUNT 500）读老 key，按桶写入新 key，控速避免打爆
+   —— 注意用 HSCAN 而不是 HGETALL，否则搬迁动作本身就是一次全实例停顿
+③ 灰度读：读走新分桶，miss 时回落老 key 并补写（影子读可先做一段时间比对，验证一致）
+④ 停双写：观察一段时间，确认新链路无 miss、无差异
+⑤ 删老 key：必须用 UNLINK（异步释放），或者 HSCAN + HDEL 分批删干净再 DEL
+```
+
+**最大的坑：`shardNum` 一旦确定就不能改。** 改了 N，`crc32(field) % N` 的结果全变，所有 field 的归属桶都错位——等于**全量数据瞬间失效**（不是丢，是找不到了）。所以：
+- **一次性把 N 定得足够大**（宁可现在每桶只有 50 个 field，也别以后要扩容）。
+- 或者用**一致性哈希 / 虚拟槽**思路（学 Redis Cluster 自己：先固定 1024 个「虚拟桶」，再把虚拟桶映射到实际 key，扩容时只迁移部分虚拟桶）——**但这已经是在重新实现 Cluster 了**，通常说明你该考虑「这份数据是不是根本不该用一个 Hash 建模」。
+- 面试时主动说出这一条，比把拆分方案背得多流畅都管用。
+
+---
+
+**排查补充（怎么先找到大 key）**：
+
+- **`redis-cli --bigkeys`**：`SCAN` 全库，按类型报告最大的 key。**局限要知道**：① 它对集合类看的是**元素个数**而非内存占用（100 个 1MB 的 value 它不认为大）；② 每种类型**只报 top 1**；③ 全量 SCAN 有一定负载，建议**在从库上跑**并带 `-i 0.1` 控速。
+- **`redis-cli --memkeys`**（6.0+）：改用 `MEMORY USAGE` 采样，**按真实内存**找大 key，比 `--bigkeys` 更准。
+- **`MEMORY USAGE key [SAMPLES n]`**：单 key 的真实内存占用（集合类是**抽样估算**，`SAMPLES 0` 表示全量精确，但对大 key 本身就慢，慎用）。
+- **离线分析 RDB**：把 RDB 拷到别的机器上用工具解析（`redis-rdb-cli` 等），**对线上零影响**，是最推荐的常态化巡检方式。注意工具要支持你的 RDB 版本（7.x 的 listpack 编码老工具可能不认）。
+- **常态化防御**：在客户端 SDK 里加**写入拦截**——value 超阈值直接告警/拒绝。**大 key 是「长出来的」，事后治理永远比事前拦截贵。**
+
 ### Q33. Redis 做延迟队列怎么实现？
 
 - **ZSet 方案**：`score` 存执行时间戳，`zadd delay_queue <到期时间> <任务>`；消费者轮询 `zrangebyscore delay_queue 0 <当前时间>` 取到期任务，取到后 `zrem` 删除（要用 Lua 或事务保证「取 + 删」原子，防重复消费）。
@@ -389,13 +796,109 @@ then return redis.call('del', KEYS[1]) else return 0 end
 - **缓存预热**：系统上线/重启前，提前把热点数据加载进缓存，避免上线瞬间大量请求全打到 DB（冷启动雪崩）。
 - **缓存降级**：极端情况（Redis 挂了/压力过大），暂时关闭非核心缓存逻辑、直接读 DB 或返回兜底默认值/旧数据，保证核心链路可用（服务可用性 > 数据实时性）。
 
+### Q37. Redis 单机 QPS 能到多少？什么机器规格？（容量估算必问）
+
+**先给标准答法**（面试官要的不是一个数字，是「量级 + 前提 + 瓶颈在哪」）：
+
+> 「**单实例简单命令大致 10 万 QPS 量级**。这个数字有前提：小 value（百字节内）、O(1) 命令、内网、不开 pipeline。因为 Redis **命令执行是单线程**，QPS 上限主要由**单核主频 + 网络 syscall 开销**决定，堆核数不会提升。**开 pipeline 能到几十万甚至上百万**（省的是 RTT 和 syscall，不是计算）。真要判断能不能跑到这个数，我会先算**带宽**——value 一大，网卡先于 CPU 打满。」
+
+---
+
+**一、参考数字（按场景分档，别只背一个数）**
+
+| 场景 | 量级（ops/s） | 说明 |
+|------|------|------|
+| 官方 `redis-benchmark` 经典基线 | **~10 万** | redis.io 文档里那台老 Intel Xeon E5520 @2.26GHz、loopback、小 value，SET/GET 都在 10 万上下 |
+| 现代云主机，单实例、无 pipeline | **8 万 ~ 15 万** | 8C16G 级别、主频 ≥2.5GHz、万兆内网、value < 100B |
+| 同上，开 `io-threads 4` | **20 万 ~ 30 万** | 网络收发并行化后，瓶颈从网络栈回到命令执行本身（6.0+） |
+| 同上，pipeline 深度 16~32 | **50 万 ~ 100 万+** | 单次 syscall 处理几十条命令，RTT 被完全摊掉 |
+| 云厂商托管版单分片标称 | **~10 万** | 各家口径不同（是否含 pipeline、value 多大），**看标称必须看测试条件** |
+| 复杂命令 / 大 value | **几千 ~ 几万** | `ZRANGEBYSCORE` 取几百条、value 上 KB，一条命令的成本涨一到两个数量级 |
+
+**延迟**：内网 p99 通常 **< 1ms**（`redis-cli --latency` 常见 0.1~0.5ms）。**其中绝大部分是网络 RTT，不是 Redis 处理**——单条 O(1) 命令的服务端处理是**微秒级**。这也解释了为什么 pipeline 提升那么大：它砍掉的是占比最大的那部分。
+
+---
+
+**二、机器规格怎么配（比 QPS 数字更值得记）**
+
+| 资源 | 建议 | 原因 |
+|------|------|------|
+| **CPU 主频** | **越高越好，优先于核数** | 命令执行单线程 → **QPS 直接正比于单核性能**。3.0GHz 的 4 核比 2.0GHz 的 32 核跑得快 |
+| **CPU 核数** | **4~8 核够用** | 主线程 1 核 + bio 后台线程 + io-threads + fork 出的持久化子进程。给到 8 核已很宽裕，再多是浪费 |
+| **内存** | **数据量 × 2 ~ 2.5 倍** | ⚠️ 必须留出：① fork 持久化时 COW 复制的脏页（写越密集越多，最坏接近翻倍，见 Q14）；② 渐进式 rehash 期间两张表并存（见 Q39）；③ 复制缓冲区 + 客户端 output buffer。**`maxmemory` 一般设为物理内存的 50%~70%**，绝不能设满 |
+| **网卡** | **万兆起步** | 见下面的带宽口算——千兆网卡是最常见的隐形天花板 |
+| **磁盘** | 开 AOF 用 SSD | `appendfsync everysec` 每秒 fsync，机械盘会周期性拖住主线程 |
+| **部署** | **一机多实例，绑核** | 单实例吃不满多核 → 一台 16 核机器跑 4~8 个实例（Cluster 分片），用 `taskset` 绑核减少调度抖动。**这是压榨多核的正解，而不是指望单实例变快** |
+
+---
+
+**三、⭐ 带宽口算（白板题，一定要会算）**
+
+**Redis 的实际瓶颈经常不是 CPU，是网卡。** 算法很简单：
+
+```
+所需带宽 ≈ QPS × value 大小
+```
+
+| value 大小 | 10 万 QPS 需要的带宽 | 千兆网卡（125 MB/s）够吗 | 万兆（1.25 GB/s）够吗 |
+|-----------|------------------|--------------------|------------------|
+| 100 B | 10 MB/s | ✅ 绰绰有余 | ✅ |
+| 1 KB | **100 MB/s** | ⚠️ **基本打满**（理论上限 125MB/s） | ✅ |
+| 10 KB | **1 GB/s** | ❌ 差 8 倍 | ⚠️ **接近打满** |
+| 100 KB | 10 GB/s | ❌ | ❌ 差 8 倍 |
+
+**结论（这句话是得分点）**：**「10 万 QPS」只在小 value 下成立。** value 到 1KB，千兆网卡就先于 CPU 成为瓶颈；到 10KB，万兆也快到头了——这时候你看监控会发现 **Redis 的 CPU 才 30%，QPS 却上不去**，新手常误判成「Redis 不行」，其实是网卡满了。这也是 Q32 治理 bigkey 的另一个理由：**大 value 不只阻塞主线程，还提前吃光带宽**。
+
+---
+
+**四、影响 QPS 的因素清单（追问时逐条摊开）**
+
+1. **命令复杂度**：O(1) 的 `GET`/`SET`/`HGET` 最快；O(log n) 的 ZSet 操作稍慢；O(n) 的 `HGETALL`/`SMEMBERS`/`KEYS` 直接把 QPS 打到地板（见 Q10）。
+2. **value 大小**：见上面的带宽账。
+3. **是否 pipeline**：不 pipeline 时每条命令一次 RTT + 一对 `read`/`write` syscall，**syscall 开销占大头**；pipeline 把 N 条摊成一次，是**最廉价的性能优化**。
+4. **连接数**：连接太少压不出来，太多（上万）epoll 遍历和内存开销上升。生产靠**连接池**维持在合理区间。
+5. **短连接**：每次建连三次握手 + Redis 侧分配 client 结构，**QPS 可能掉一个数量级**。必须用长连接池。
+6. **持久化**：`bgsave` / `bgrewriteaof` 的 fork 会带来**几十到上百 ms 的阻塞**（内存越大越久），期间 QPS 掉零；COW 还会抢内存带宽。
+7. **CPU 主频与超线程**、**NUMA 跨节点访存**、**云主机的网络限速**（很多云实例有 PPS 上限，包量小的时候**先撞 PPS 而不是带宽**——这条能答出来很加分）。
+8. **跨机房**：RTT 从 0.1ms 变 30ms，不 pipeline 的话单连接 QPS 直接掉到 30 左右。
+
+---
+
+**五、怎么自己测（动手项，符合三角咬合）**
+
+```bash
+# 基准：50 个并发连接，10 万次请求，只测 GET/SET
+redis-benchmark -h 127.0.0.1 -p 6379 -c 50 -n 100000 -t get,set -q
+
+# 加 value 大小（-d），观察 QPS 随 value 增大而掉 —— 验证上面的带宽账
+redis-benchmark -c 50 -n 100000 -t set -d 1024 -q
+redis-benchmark -c 50 -n 100000 -t set -d 10240 -q
+
+# 加 pipeline（-P），观察 QPS 数量级跃升 —— 验证「省的是 RTT」
+redis-benchmark -c 50 -n 100000 -t get -P 16 -q
+
+# 延迟基线：服务端处理延迟 vs 端到端延迟
+redis-cli --latency          # 端到端（含网络）
+redis-cli --intrinsic-latency 10   # 机器本身的固有延迟（调度抖动），不含网络
+```
+
+> ⚠️ **在本机 loopback 上测出来的数字会偏高**（没有真实网卡开销），别拿它当生产容量。**压测机和 Redis 必须分开部署**，否则压测进程本身抢走的 CPU 会污染结果。
+
+---
+
+**六、系统设计题里怎么用这个数字（格 11 的接口）**
+
+> 「需要 50 万 QPS 怎么办？」——**保守按单分片 5 万估**（不是 10 万，留够余量给复杂命令、value 大小和峰值抖动），**50 万 ÷ 5 万 = 10 个分片**，再考虑读多写少可以加从库分摊读，最后按内存需求校验分片数是否还要往上调（取「QPS 算出的分片数」和「内存算出的分片数」的**较大值**）。
+
+**面试红线**：**别脱口而出「Redis 能扛几十万 QPS」**。不加前提的数字会立刻被追问「什么 value？开 pipeline 了吗？什么命令？」——答不上来就暴露了没有真实压测经验。**先给量级，再主动补前提和瓶颈**，这题就赢了。
+
 ---
 
 ## 十、底层机制 + 高可用深水区（高频补充，考频 ★★★★）
 
 > 这一章是「区分度题」——前九章答好算合格，这一章答好算亮点。多是底层机制和高可用的坑，面试官最爱往这里追。
 
-### Q37. Redis vs Memcached？（经典对比开场题）
+### Q38. Redis vs Memcached？（经典对比开场题）
 
 | 维度 | Redis | Memcached |
 |------|-------|-----------|
@@ -409,7 +912,7 @@ then return redis.call('del', KEYS[1]) else return 0 end
 
 **结论**：绝大多数场景选 **Redis**（功能全面）。Memcached 只在「纯 KV、超大规模、多核纯缓存、value 大小固定」的边缘场景还有一点点优势（多线程 + slab 抗碎片），实际已基本被 Redis 取代。
 
-### Q38. 渐进式 rehash 是什么？dict 扩容为什么不阻塞？
+### Q39. 渐进式 rehash 是什么？dict 扩容为什么不阻塞？
 
 Redis 底层的 **dict（哈希表）** 会因负载因子过高而扩容（默认 >1 且当前无 bgsave/bgrewriteaof 时扩，>5 强制扩）、过低而缩容。百万级 key 一次性 rehash 会长时间独占单线程 → 用**渐进式 rehash** 摊开：
 
@@ -419,7 +922,7 @@ Redis 底层的 **dict（哈希表）** 会因负载因子过高而扩容（默�
 - 全部搬完，`ht[1]` 变 `ht[0]`，释放旧表。
 - **代价**：rehash 期间两表并存，**内存短暂翻倍**。好处是把一次大停顿摊成每次 O(1)，不阻塞。
 
-### Q39. 为什么禁用 `keys *`？SCAN 怎么做到渐进遍历、不重不漏？
+### Q40. 为什么禁用 `keys *`？SCAN 怎么做到渐进遍历、不重不漏？
 
 - **`keys *` 一次性返回所有 key，O(n) 独占单线程**，key 多时直接卡死，生产**禁用**。
 - **SCAN 游标式遍历**：`SCAN cursor` 每次返回一小批 key + 下一个游标，`cursor=0` 开始、再次返回 `0` 结束。单次只扫一小段，不阻塞。
@@ -427,7 +930,7 @@ Redis 底层的 **dict（哈希表）** 会因负载因子过高而扩容（默�
 - **关键机制——高位进位游标（reverse binary iteration）**：游标的二进制**从高位往低位加**，这样即使遍历途中 dict 发生了扩容/缩容（桶数变化），已遍历和未遍历的桶也不会错乱，从而在 rehash 中仍**不漏**。这是 SCAN 设计的精髓。
 - **家族**：`HSCAN`/`SSCAN`/`ZSCAN` 渐进遍历大 hash/set/zset，是处理 bigkey 的标准手段。`COUNT` 只是「每次扫多少桶」的 hint（非精确条数），`MATCH` 是返回后过滤（不减少扫描量）。
 
-### Q40. 主从复制下，过期 key 怎么处理？（经典陷阱）
+### Q41. 主从复制下，过期 key 怎么处理？（经典陷阱）
 
 **核心：从库不主动删除过期 key，一切以主库为准。**
 
@@ -436,7 +939,7 @@ Redis 底层的 **dict（哈希表）** 会因负载因子过高而扩容（默�
 - **为什么这么设计**：保证主从数据严格一致、以主库为准。若从库自行删除，可能出现「主库还没删、从库已删」的不一致。
 - **老坑**：3.2 之前的从库读过期 key 可能返回**旧值**（脏读），3.2 起修复为返回 nil。
 
-### Q41. Redis 什么情况下会丢数据？脑裂是什么？（高可用必问）
+### Q42. Redis 什么情况下会丢数据？脑裂是什么？（高可用必问）
 
 **两大丢数据场景**：
 1. **异步复制丢数据**：主库写完**立即返回客户端**（复制是异步的），若此刻主库宕机、数据还没同步到从库 → 从库升主 → 这批数据丢失。
@@ -446,7 +949,7 @@ Redis 底层的 **dict（哈希表）** 会因负载因子过高而扩容（默�
 - **`min-replicas-to-write N` + `min-replicas-max-lag S`**（旧名 `min-slaves-*`）：主库必须至少有 N 个从库连接、且复制延迟在 S 秒内，才接受写。脑裂时老主库连不上足够从库 → **拒绝写** → 大幅减少脑裂丢数据。
 - 强一致场景改用 **etcd/Zookeeper（Raft/ZAB 共识）**，或用 `WAIT` 命令做「写后等 N 个从库确认」的准同步。
 
-### Q42. 内存碎片是什么？怎么监控和处理？
+### Q43. 内存碎片是什么？怎么监控和处理？
 
 - **成因**：① **内部碎片**——分配器（jemalloc）按固定规格分配，申请 size 和实际分配对不齐；② **外部碎片**——key 频繁改大小/删除，内存还给了分配器但没还给 OS。
 - **监控**：`INFO memory` 的 **`mem_fragmentation_ratio` = used_memory_rss / used_memory**。
@@ -455,14 +958,14 @@ Redis 底层的 **dict（哈希表）** 会因负载因子过高而扩容（默�
 - **处理**：① 重启节点（重新加载最彻底，但需主从切换避免中断）；② **`activedefrag yes`**（4.0+ 在线自动碎片整理，牺牲少量 CPU）；③ `MEMORY PURGE`。
 - **预防**：避免大量变长、频繁增删的 key。
 
-### Q43. 工程细节速记（RESP / EVALSHA / 可重入锁 / 容量上限）
+### Q44. 工程细节速记（RESP / EVALSHA / 可重入锁 / 容量上限）
 
 - **RESP（Redis Serialization Protocol）**：客户端-服务端通信协议，用**首字节区分类型**（`+`简单串 / `-`错误 / `:`整数 / `$`批量串 / `*`数组），文本为主、解析快。**RESP3（6.0）** 新增 map/set/double 等类型，并支持服务端**推送**（client-side caching 的基础）。
 - **EVAL vs EVALSHA**：`EVAL` 每次传整段脚本；`EVALSHA` 只传脚本的 **SHA1**（脚本已缓存在服务端）→ 省带宽。先 `SCRIPT LOAD`，再 `EVALSHA`，遇 `NOSCRIPT` 回退 `EVAL`。
 - **可重入锁（Redisson）**：用 **Hash 结构**存锁——field = 线程唯一标识、value = 重入次数。同线程再次加锁 value+1，释放时 -1，减到 0 才真删 → 支持**可重入**。配合看门狗续期（见 Q23）。
 - **容量上限**：单个 String 最大 **512MB**；单 key 的集合类元素理论上限 2³²-1。
 
-### Q44. Redis 各版本关键新特性（时效性速记）
+### Q45. Redis 各版本关键新特性（时效性速记）
 
 - **6.0**：**I/O 多线程**（`io-threads`）、**ACL 权限**、**RESP3**、**客户端缓存（tracking）**、SSL/TLS。
 - **7.0**：**Function**（替代部分 Lua）、**多 AOF 文件（Multi-Part AOF）**、**Sharded Pub/Sub**、**listpack 全面替代 ziplist**。
@@ -481,6 +984,8 @@ Redis 底层的 **dict（哈希表）** 会因负载因子过高而扩容（默�
   - **持久化 fork + COW**（Q14）该起个 Docker 实例，`bgsave` 时观察内存翻倍、fork 阻塞时长，把「大实例 fork 慢」打出来看。
   - **Cluster 槽迁移 + MOVED/ASK 重定向**（Q27/Q28）是最该动手的：起 3 主 3 从集群，`cluster reshard` 迁槽，抓 `MOVED` 重定向过程，验证 hash tag。
   - **分布式锁**（Q22~Q24）可以配 Go 写一版 `SET NX` + Lua 释放 + 看门狗续期的最小实现，再故意制造超时误删，复现问题。
+  - **QPS 与带宽**（Q37）是最容易动手的一项：`redis-benchmark` 扫一遍 `-d`（value 大小）× `-P`（pipeline 深度）的二维表，把「QPS 随 value 增大而掉」「pipeline 让 QPS 跃升一个数量级」两条曲线打出来，贴回正文——**这两条曲线一画，Q37 就从背数字变成了自己量过的数字**，面试时的底气完全不同。
+  - **大 Hash 拆分**（Q32 展开）值得写成可运行 demo：灌 10 万 field 的 Hash，对比 `HGETALL` 与「分桶 + Pipeline」的耗时和阻塞时长（用 `redis-cli --latency` 在旁边观察其他命令被卡多久），把「大 key 阻塞全实例」肉眼看见。
 
 ### 与能力地图的挂钩
 
@@ -494,6 +999,15 @@ Redis 底层的 **dict（哈希表）** 会因负载因子过高而扩容（默�
 - **+1 天（07-10）**：盖答案自测 30 秒电梯版 + Q2/Q8/Q13/Q18/Q22 五道核心题。
 - **动手项**：起 `docker run redis:7`，跑通 Q27 的 Cluster 槽迁移 + Q22 的分布式锁误删复现，补进正文才升级为「毕业」。
 
+**2026-08-04 增补**（本次补的四块，重新起算复习）：
+- **Q11/Q12 英文全称**：RDB = Redis DataBase（快照/状态），AOF = Append Only File（只追加日志/过程）。挂到「快照 vs 日志」的通用模式上记（MySQL checkpoint vs redo、etcd snapshot vs WAL、HDFS FsImage vs EditLog）。
+- **Q20 重写**：四种读写模式的分界线定为**「谁在调用 DB」**（aside = 应用两头跑；through = 请求穿过缓存）。后三种各自展开：Read-Through 白送击穿防护（= 组件内置的互斥重建 / singleflight）；Write-Through 的价值是**一致性不是性能**；Write-Behind 的杀手锏是**写合并**，并接到 InnoDB 脏页 / AOF everysec / page cache 三个已知场景 + 「点赞数攒批刷库」这个自己写过的例子。
+- **Q32 展开大 Hash 拆分**：四种拆法（纵向语义拆 > 横向分桶 > 打平 String > value 压缩）+ 分桶 Go 实现 + 拆完失去什么 + hash tag 的取舍 + 五步平滑迁移 + 「N 不可改」这条红线。
+- **Q37 新增 QPS/规格**：~10 万量级 + 前提 + `带宽 ≈ QPS × value` 口算 + 「主频优先于核数、内存留一倍给 fork」的配机原则。
+- **+1 天（08-05）**：自测题 11~20（新增的那批）盖答案过一遍。
+- **+7 天（08-11）**：全篇 24 题。
+- **优先动手项**：`redis-benchmark` 的 `-d` × `-P` 二维表（把 Q37 从背的变成量的），以及大 Hash 阻塞复现。
+
 ### 自测题（盖住上面的答案，先自己讲一遍）
 
 1. ZSet 为什么要「跳表 + 哈希表」两个结构？各自负责什么复杂度？
@@ -506,10 +1020,19 @@ Redis 底层的 **dict（哈希表）** 会因负载因子过高而扩容（默�
 8. Cluster 为什么是 16384 个槽？key 落哪个节点怎么算？MOVED 和 ASK 区别？
 9. Sentinel、Cluster、主从三者各解决什么、不解决什么？演进路线？
 10. bigkey 和 hotkey 的危害和解法各是什么？
-11. 缓存四种读写模式（Cache-Aside / Read-Through / Write-Through / Write-Behind）各怎么走？为什么 Redis 场景几乎只用 Cache-Aside？
-12. 渐进式 rehash 怎么做到不阻塞？rehash 期间读写落在哪个表？
-13. 为什么禁用 `keys *`？SCAN 靠什么机制在 rehash 中不重不漏？
-14. 主从复制下，从库能自己删过期 key 吗？过期删除以谁为准？
-15. Redis 什么情况下会丢数据？脑裂是什么？`min-replicas-to-write` 怎么缓解？
+11. 缓存四种读写模式（Cache-Aside / Read-Through / Write-Through / Write-Behind）各怎么走？**只用一句话区分它们的分界线是什么？**
+12. **Write-Through 和 Write-Behind 只差一件事，是哪件？各自的收益和代价？举出三个你已经见过的 Write-Behind 实例。**
+13. **Read-Through 除了「回源逻辑收敛」，还白送了 Q18 里的哪个能力？为什么？**
+14. **为什么 Redis 几乎只能用 Cache-Aside，而 Caffeine 可以用 Read/Write-Through？**
+15. **一个 10 万 field 的大 Hash 怎么拆？纵向拆和横向分桶各在什么前提下用？分桶数 N 定了之后为什么不能改？**
+16. **分桶之后失去了哪些能力（列 4 条）？TTL 那个坑是什么、怎么绕？**
+17. **Cluster 下拆分的桶要不要加 hash tag？加了会毁掉什么？**
+18. **Redis 单实例 QPS 什么量级？这个数字的前提是什么？为什么堆 CPU 核数没用？**
+19. **口算：value 1KB、要跑 10 万 QPS，需要多少带宽？千兆网卡够吗？CPU 只有 30% 但 QPS 上不去，最先怀疑什么？**
+20. RDB 和 AOF 的英文全称分别是什么？名字本身透露了什么机制？
+21. 渐进式 rehash 怎么做到不阻塞？rehash 期间读写落在哪个表？
+22. 为什么禁用 `keys *`？SCAN 靠什么机制在 rehash 中不重不漏？
+23. 主从复制下，从库能自己删过期 key 吗？过期删除以谁为准？
+24. Redis 什么情况下会丢数据？脑裂是什么？`min-replicas-to-write` 怎么缓解？
 
 答不出的，回对应 Q 挖。

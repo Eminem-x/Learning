@@ -1,0 +1,724 @@
+<title>GMP 调度沙盘 · Go Runtime Dispatch Board</title>
+<style>
+  :root{
+    --ground:#EDF1F3; --panel:#FFFFFF; --panel-2:#F5F8F9; --edge:#C9D6DC;
+    --ink:#0D1B23; --ink-2:#3D555F; --muted:#748C97;
+    --accent:#0089AC; --accent-soft:#00ADD814;
+    --run:#1E9E63; --block:#B4740B; --preempt:#C4374F; --steal:#6C55C4;
+    --grid:#0d1b2310;
+    --shadow:0 1px 2px #0d1b230d, 0 8px 24px #0d1b2310;
+    --display:"Avenir Next Condensed","Oswald","Futura","Helvetica Neue",-apple-system,sans-serif;
+    --body:"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Helvetica Neue",-apple-system,sans-serif;
+    --serif:"Iowan Old Style","Charter","Songti SC","Noto Serif CJK SC",Georgia,serif;
+    --mono:"SF Mono","Menlo","Cascadia Mono","Roboto Mono",ui-monospace,monospace;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --ground:#0B161D; --panel:#132430; --panel-2:#0F1E28; --edge:#26404F;
+      --ink:#DCE8ED; --ink-2:#A7BEC8; --muted:#6E8895;
+      --accent:#35C4EA; --accent-soft:#35c4ea1a;
+      --run:#4FD08A; --block:#E8A33D; --preempt:#F0768F; --steal:#A38BFF;
+      --grid:#dce8ed0d;
+      --shadow:0 1px 2px #0006, 0 10px 30px #0008;
+    }
+  }
+  :root[data-theme="dark"]{
+      --ground:#0B161D; --panel:#132430; --panel-2:#0F1E28; --edge:#26404F;
+      --ink:#DCE8ED; --ink-2:#A7BEC8; --muted:#6E8895;
+      --accent:#35C4EA; --accent-soft:#35c4ea1a;
+      --run:#4FD08A; --block:#E8A33D; --preempt:#F0768F; --steal:#A38BFF;
+      --grid:#dce8ed0d;
+      --shadow:0 1px 2px #0006, 0 10px 30px #0008;
+  }
+  :root[data-theme="light"]{
+    --ground:#EDF1F3; --panel:#FFFFFF; --panel-2:#F5F8F9; --edge:#C9D6DC;
+    --ink:#0D1B23; --ink-2:#3D555F; --muted:#748C97;
+    --accent:#0089AC; --accent-soft:#00ADD814;
+    --run:#1E9E63; --block:#B4740B; --preempt:#C4374F; --steal:#6C55C4;
+    --grid:#0d1b2310;
+    --shadow:0 1px 2px #0d1b230d, 0 8px 24px #0d1b2310;
+  }
+
+  body{
+    background:var(--ground); color:var(--ink); font-family:var(--body);
+    font-size:16px; line-height:1.75; -webkit-font-smoothing:antialiased;
+    padding:0 20px 96px;
+  }
+  .wrap{max-width:1120px; margin:0 auto;}
+  .col{max-width:68ch;}
+
+  /* ---------- masthead ---------- */
+  .mast{
+    padding:56px 0 28px; border-bottom:1px solid var(--edge);
+    display:flex; flex-direction:column; gap:18px;
+  }
+  .eyebrow{
+    font-family:var(--display); text-transform:uppercase; letter-spacing:.22em;
+    font-size:12px; color:var(--muted); display:flex; gap:14px; align-items:center; flex-wrap:wrap;
+  }
+  .eyebrow b{color:var(--accent); font-weight:600;}
+  h1{
+    font-family:var(--display); font-size:clamp(38px,6vw,68px); line-height:.98;
+    letter-spacing:-.01em; text-wrap:balance; font-weight:600; margin:0;
+  }
+  h1 span{color:var(--accent);}
+  .lede{
+    font-family:var(--serif); font-size:19px; line-height:1.7; color:var(--ink-2);
+    max-width:62ch; border-left:2px solid var(--accent); padding-left:20px;
+  }
+
+  h2{
+    font-family:var(--display); text-transform:uppercase; letter-spacing:.14em;
+    font-size:15px; font-weight:600; color:var(--accent);
+    margin:64px 0 18px; padding-bottom:10px; border-bottom:1px solid var(--edge);
+    display:flex; align-items:baseline; gap:12px;
+  }
+  h2::before{
+    content:attr(data-n); font-family:var(--mono); font-size:12px; letter-spacing:0;
+    color:var(--muted); font-weight:400;
+  }
+  h3{font-family:var(--display); font-size:20px; letter-spacing:.02em; margin:34px 0 8px; font-weight:600;}
+  p{margin:0 0 14px;}
+  a{color:var(--accent); text-decoration:none; border-bottom:1px solid var(--accent-soft);}
+  a:hover{border-bottom-color:currentColor;}
+  a:focus-visible, button:focus-visible{outline:2px solid var(--accent); outline-offset:3px; border-radius:3px;}
+  code{font-family:var(--mono); font-size:.88em; background:var(--accent-soft); color:var(--ink);
+       padding:1px 5px; border-radius:3px;}
+  strong{color:var(--ink); font-weight:600;}
+  ul{margin:0 0 16px; padding-left:20px;}
+  li{margin-bottom:7px;}
+
+  /* ---------- dispatch console ---------- */
+  .console{
+    margin-top:34px; background:var(--panel); border:1px solid var(--edge);
+    border-radius:4px; box-shadow:var(--shadow); overflow:hidden;
+  }
+  .tabs{
+    display:flex; overflow-x:auto; border-bottom:1px solid var(--edge); background:var(--panel-2);
+    scrollbar-width:thin;
+  }
+  .tab{
+    font-family:var(--display); text-transform:uppercase; letter-spacing:.1em; font-size:12px;
+    padding:14px 18px; background:none; border:0; border-bottom:2px solid transparent;
+    color:var(--muted); cursor:pointer; white-space:nowrap; font-weight:600;
+  }
+  .tab:hover{color:var(--ink);}
+  .tab[aria-selected="true"]{color:var(--accent); border-bottom-color:var(--accent); background:var(--panel);}
+  .tab i{font-style:normal; font-family:var(--mono); font-size:11px; opacity:.55; margin-right:7px;}
+
+  .board{
+    display:grid; grid-template-columns:230px 1fr; gap:0;
+    background:
+      repeating-linear-gradient(0deg,var(--grid) 0 1px,transparent 1px 22px),
+      repeating-linear-gradient(90deg,var(--grid) 0 1px,transparent 1px 22px);
+  }
+  @media (max-width:760px){ .board{grid-template-columns:1fr;} }
+  .rail{border-right:1px solid var(--edge); padding:16px; display:flex; flex-direction:column; gap:14px;}
+  @media (max-width:760px){ .rail{border-right:0; border-bottom:1px solid var(--edge);} }
+  .pfield{padding:16px; display:flex; gap:14px; overflow-x:auto;}
+
+  .box{border:1px solid var(--edge); border-radius:3px; background:var(--panel); padding:10px 11px;}
+  .box-t{
+    font-family:var(--display); text-transform:uppercase; letter-spacing:.13em; font-size:10.5px;
+    color:var(--muted); display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;
+    font-weight:600;
+  }
+  .box-t em{font-style:normal; font-family:var(--mono); letter-spacing:0; font-size:10px; opacity:.8;}
+
+  .pcard{
+    min-width:216px; flex:1; border:1px solid var(--edge); border-radius:3px; background:var(--panel);
+    display:flex; flex-direction:column; transition:border-color .25s, box-shadow .25s;
+  }
+  .pcard.hot{border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft);}
+  .phead{
+    display:flex; align-items:center; justify-content:space-between; gap:8px;
+    padding:9px 11px; border-bottom:1px solid var(--edge); background:var(--panel-2);
+  }
+  .pid{font-family:var(--display); font-size:17px; letter-spacing:.06em; font-weight:600;}
+  .pill{
+    font-family:var(--mono); font-size:10px; padding:2px 7px; border-radius:99px;
+    border:1px solid currentColor; white-space:nowrap;
+  }
+  .pill.run{color:var(--run);} .pill.idle{color:var(--muted);}
+  .pill.sys{color:var(--block);} .pill.spin{color:var(--steal);}
+
+  .slot{padding:9px 11px; border-bottom:1px dashed var(--edge);}
+  .slot:last-child{border-bottom:0;}
+  .slot-l{
+    font-family:var(--display); text-transform:uppercase; letter-spacing:.12em;
+    font-size:10px; color:var(--muted); margin-bottom:6px; display:flex; gap:6px; align-items:center;
+    font-weight:600;
+  }
+  .slot-l em{font-style:normal; font-family:var(--mono); letter-spacing:0; opacity:.75; font-size:10px;}
+  .q{display:flex; flex-wrap:wrap; gap:5px; min-height:26px; align-content:flex-start;}
+
+  .g{
+    font-family:var(--mono); font-size:11.5px; padding:3px 8px; border-radius:2px;
+    border:1px solid var(--edge); background:var(--panel-2); color:var(--ink-2);
+    display:inline-flex; align-items:center; gap:5px; animation:pop .28s ease-out;
+  }
+  .g::before{content:""; width:5px; height:5px; border-radius:50%; background:currentColor; opacity:.7;}
+  .g.cpu{color:var(--ink-2);}
+  .g.on{color:var(--run); border-color:var(--run); background:transparent; font-weight:600;}
+  .g.wait{color:var(--block); border-color:var(--block); background:transparent;}
+  .g.sys{color:var(--block); border-color:var(--block); border-style:dashed; background:transparent;}
+  .g.pre{color:var(--preempt); border-color:var(--preempt); background:transparent;}
+  .g.stl{color:var(--steal); border-color:var(--steal); background:transparent;}
+  .g.flash{animation:flash .6s ease-out;}
+  .g .tag{opacity:.6; font-size:10px;}
+  .empty{font-family:var(--mono); font-size:11px; color:var(--muted); opacity:.55;}
+  @keyframes pop{from{opacity:0; transform:translateY(-4px) scale(.94);} to{opacity:1; transform:none;}}
+  @keyframes flash{0%{box-shadow:0 0 0 0 var(--accent);} 100%{box-shadow:0 0 0 8px transparent;}}
+  @media (prefers-reduced-motion:reduce){ .g{animation:none;} .g.flash{animation:none;} }
+
+  .mchip{
+    font-family:var(--mono); font-size:11px; padding:2px 7px; border:1px solid var(--edge);
+    border-radius:2px; color:var(--ink-2); display:inline-block; margin:0 4px 4px 0;
+  }
+  .mchip.zzz{opacity:.5;}
+
+  .sysmon-box{border-color:var(--block);}
+  .sysmon-box .box-t{color:var(--block);}
+  .sysmon-txt{font-family:var(--mono); font-size:11px; color:var(--block); line-height:1.5; min-height:2em;}
+
+  /* ---------- transport ---------- */
+  .ticker{
+    border-top:1px solid var(--edge); background:var(--panel-2);
+    padding:14px 16px; display:flex; gap:16px; align-items:flex-start;
+  }
+  .step-n{
+    font-family:var(--mono); font-size:11px; color:var(--accent); border:1px solid var(--accent);
+    padding:2px 8px; border-radius:2px; white-space:nowrap; margin-top:2px;
+  }
+  .say{font-size:14.5px; line-height:1.65; color:var(--ink-2); flex:1;}
+  .say b{color:var(--ink);}
+  .say code{font-size:.9em;}
+
+  .transport{
+    border-top:1px solid var(--edge); padding:11px 16px; display:flex; gap:10px;
+    align-items:center; flex-wrap:wrap;
+  }
+  .btn{
+    font-family:var(--display); text-transform:uppercase; letter-spacing:.1em; font-size:11.5px;
+    font-weight:600; padding:7px 15px; border:1px solid var(--edge); background:var(--panel);
+    color:var(--ink); border-radius:2px; cursor:pointer; transition:.15s;
+  }
+  .btn:hover:not(:disabled){border-color:var(--accent); color:var(--accent);}
+  .btn:disabled{opacity:.35; cursor:not-allowed;}
+  .btn.pri{background:var(--accent); border-color:var(--accent); color:var(--panel);}
+  .btn.pri:hover{opacity:.86; color:var(--panel);}
+  .dots{display:flex; gap:5px; margin-left:auto; align-items:center;}
+  .dot{width:7px; height:7px; border-radius:50%; background:var(--edge); border:0; padding:0; cursor:pointer;}
+  .dot[aria-current="true"]{background:var(--accent); transform:scale(1.35);}
+
+  /* ---------- tables ---------- */
+  .tw{overflow-x:auto; margin:18px 0 26px; border:1px solid var(--edge); border-radius:3px; background:var(--panel);}
+  table{border-collapse:collapse; width:100%; font-size:14.5px; min-width:520px;}
+  th,td{padding:10px 14px; text-align:left; border-bottom:1px solid var(--edge); vertical-align:top;}
+  th{
+    font-family:var(--display); text-transform:uppercase; letter-spacing:.11em; font-size:11px;
+    color:var(--muted); background:var(--panel-2); font-weight:600; white-space:nowrap;
+  }
+  tr:last-child td{border-bottom:0;}
+  td code{white-space:nowrap;}
+
+  pre{
+    font-family:var(--mono); font-size:12.5px; line-height:1.65; background:var(--panel);
+    border:1px solid var(--edge); border-left:2px solid var(--accent); border-radius:3px;
+    padding:14px 16px; overflow-x:auto; margin:0 0 20px; color:var(--ink-2);
+  }
+  pre b{color:var(--accent); font-weight:400;}
+  pre i{color:var(--muted); font-style:normal;}
+
+  .note{
+    border:1px solid var(--edge); border-left:2px solid var(--block); background:var(--panel);
+    padding:13px 16px; margin:0 0 20px; font-size:14.5px; color:var(--ink-2); border-radius:3px;
+  }
+  .note b{color:var(--block);}
+
+  details{
+    border-bottom:1px solid var(--edge); padding:13px 0;
+  }
+  summary{cursor:pointer; font-weight:600; color:var(--ink); list-style:none; display:flex; gap:11px;}
+  summary::-webkit-details-marker{display:none;}
+  summary::before{
+    content:"›"; font-family:var(--mono); color:var(--accent); transition:transform .2s; display:inline-block;
+  }
+  details[open] summary::before{transform:rotate(90deg);}
+  details .ans{padding:12px 0 2px 22px; color:var(--ink-2); font-size:14.5px;}
+  details .ans p:last-child{margin-bottom:0;}
+
+  .foot{
+    margin-top:64px; padding-top:22px; border-top:1px solid var(--edge);
+    font-family:var(--mono); font-size:12px; color:var(--muted); display:flex;
+    justify-content:space-between; gap:16px; flex-wrap:wrap;
+  }
+  .legend{display:flex; gap:14px; flex-wrap:wrap; margin:14px 0 0; font-family:var(--mono); font-size:11.5px; color:var(--muted);}
+  .legend span{display:inline-flex; align-items:center; gap:5px;}
+  .legend i{width:9px; height:9px; border-radius:2px; border:1px solid currentColor; font-style:normal;}
+  .lg-on{color:var(--run);} .lg-rd{color:var(--ink-2);} .lg-bk{color:var(--block);}
+  .lg-pr{color:var(--preempt);} .lg-st{color:var(--steal);}
+</style>
+
+<div class="wrap">
+
+<header class="mast">
+  <div class="eyebrow"><b>GO RUNTIME</b><span>调度器沙盘</span><span>runtime/proc.go</span><span>go1.23</span></div>
+  <h1>G · M · <span>P</span><br>一个可以单步执行的调度沙盘</h1>
+  <p class="lede">
+    <strong>30 秒电梯版：</strong>G 是任务，M 是干活的 OS 线程，P 是「干活许可证 + 一条本地任务队列」。
+    M 必须先拿到 P 才能跑 G，P 的数量（GOMAXPROCS）因此就是并行度上限。
+    调度器的全部精髓只有两句话：<strong>让每个 M 尽量在自己 P 的本地队列上无锁取活</strong>（快路径），
+    <strong>本地没活时再依次去全局队列 / netpoller / 偷别人</strong>（慢路径）。
+    剩下的机制——handoff、work stealing、sysmon 抢占、netpoller——都是在回答同一个问题：
+    <em>某个 M 卡住了，怎么别让那张许可证跟着一起闲死。</em>
+  </p>
+</header>
+
+<h2 data-n="01">先认清三个角色</h2>
+<div class="col">
+<p>面试被问 GMP，八成的人会背「G 是协程，M 是线程，P 是处理器」——这句话说了等于没说。真正的分水岭是<strong>「为什么需要 P」</strong>：Go 1.1 之前只有 G-M，所有 G 挂在一条全局队列上，由一把全局锁 <code>sched.lock</code> 保护。每次取活、放活都要抢锁，核数一多锁就成了瓶颈；而且 M 之间没有亲缘性，G 刚在 M1 上跑热了缓存，下次可能被 M2 捞走。</p>
+<p>P 是为解决这个而生的<strong>调度上下文</strong>：它把「运行队列 + mcache 内存缓存 + defer 池」这些资源从全局收拢到每个 P 私有，于是绝大多数调度动作退化成对本地数组的无锁操作。</p>
+</div>
+
+<div class="tw"><table>
+<thead><tr><th>角色</th><th>本体</th><th>关键字段（runtime2.go）</th><th>数量</th></tr></thead>
+<tbody>
+<tr><td><strong>G</strong> goroutine</td><td>一个任务 + 它的栈和寄存器现场</td><td><code>stack</code>、<code>sched(gobuf)</code>、<code>atomicstatus</code>、<code>m</code></td><td>无上限，初始栈 2KB，可增长</td></tr>
+<tr><td><strong>M</strong> machine</td><td>一条真正的 OS 线程</td><td><code>g0</code>（调度专用栈）、<code>curg</code>、<code>p</code>、<code>spinning</code></td><td>按需创建，上限 <code>SetMaxThreads</code> 默认 10000</td></tr>
+<tr><td><strong>P</strong> processor</td><td>执行许可证 + 本地队列 + 内存缓存</td><td><code>runq[256]</code>、<code>runnext</code>、<code>mcache</code>、<code>status</code></td><td>固定 = GOMAXPROCS</td></tr>
+</tbody></table></div>
+
+<div class="note"><b>易错点：</b>M 上其实跑着两个 G。<code>g0</code> 是每个 M 自带的、使用系统栈的特殊 goroutine，<strong>调度代码本身运行在 g0 上</strong>；<code>curg</code> 才是你写的业务 goroutine。所谓「调度」就是在 g0 栈和 curg 栈之间来回切换现场（<code>mcall</code> / <code>gogo</code>），一次约 0.2μs，比线程切换（约 1μs，还要陷内核）便宜一个量级。</div>
+
+<h2 data-n="02">沙盘：六个场景，一步一步走</h2>
+<div class="col">
+<p>下面这块板子是 <strong>GOMAXPROCS=2</strong> 的运行时快照。左栏是全局结构，右侧是两个 P 各自的车道。点标签切换场景，用 <b>下一步</b> 单步推进——每一步的旁白就是你在白板上该说的话。</p>
+</div>
+
+<div class="console">
+  <div class="tabs" role="tablist" id="tabs"></div>
+  <div class="board">
+    <div class="rail">
+      <div class="box">
+        <div class="box-t">全局运行队列 <em>sched.runq</em></div>
+        <div class="q" id="grq"></div>
+      </div>
+      <div class="box">
+        <div class="box-t">网络轮询器 <em>netpoll</em></div>
+        <div class="q" id="net"></div>
+      </div>
+      <div class="box">
+        <div class="box-t">空闲 M 池 <em>sched.midle</em></div>
+        <div class="q" id="idle"></div>
+      </div>
+      <div class="box sysmon-box">
+        <div class="box-t">系统监控 <em>sysmon</em></div>
+        <div class="sysmon-txt" id="sysmon">—</div>
+      </div>
+    </div>
+    <div class="pfield" id="pfield"></div>
+  </div>
+  <div class="ticker">
+    <span class="step-n" id="stepn">1 / 1</span>
+    <div class="say" id="say"></div>
+  </div>
+  <div class="transport">
+    <button class="btn" id="prev">‹ 上一步</button>
+    <button class="btn pri" id="next">下一步 ›</button>
+    <button class="btn" id="play">自动播放</button>
+    <button class="btn" id="reset">重来</button>
+    <div class="dots" id="dots"></div>
+  </div>
+</div>
+<div class="legend">
+  <span><i class="lg-on"></i>执行中 _Grunning</span>
+  <span><i class="lg-rd"></i>就绪 _Grunnable</span>
+  <span><i class="lg-bk"></i>阻塞 _Gwaiting/_Gsyscall</span>
+  <span><i class="lg-pr"></i>被抢占</span>
+  <span><i class="lg-st"></i>被偷取</span>
+</div>
+
+<h2 data-n="03">findRunnable：一切慢路径的总入口</h2>
+<div class="col">
+<p>沙盘里 2、3 号场景走的都是同一个函数 <code>findRunnable()</code>。它的查找顺序是整个调度器最值得背的一段，而且每一步的顺序都有理由：</p>
+</div>
+<pre><b>schedule()</b> <i>// 运行在 g0 栈上，永不返回</i>
+  ├─ 每 61 次调度：<b>先看一眼全局队列</b>  <i>// 防止全局队列被本地队列饿死</i>
+  ├─ <b>runnext</b>                        <i>// 刚被唤醒的 G，缓存最热，优先级最高</i>
+  ├─ <b>本地 runq</b>（无锁环形数组，256 槽） <i>// 快路径，99% 的调度到这就结束了</i>
+  └─ <b>findRunnable()</b> ── 慢路径 ──────────────────────────
+       ├─ 1. 再查本地队列
+       ├─ 2. 全局队列（加 sched.lock，一次批量取 n/GOMAXPROCS+1 个）
+       ├─ 3. <b>netpoll(0)</b> 非阻塞检查：有没有网络 IO 就绪了
+       ├─ 4. <b>work stealing</b>：随机顺序遍历所有 P，偷走一半
+       │      <i>// 随机是为了避免所有空闲 M 一窝蜂盯着同一个 P</i>
+       ├─ 5. 再查一遍全局 / GC 后台任务
+       └─ 6. 都没有 → 解绑 P，M 挂到 sched.midle 睡眠（futex/sem 阻塞）</pre>
+<div class="col">
+<p><strong>为什么是 61？</strong>一个质数，避开任何周期性行为的共振；大到让快路径几乎无额外开销，小到能保证全局队列里的 G 不会被无限推迟。这是个纯经验值，源码注释里直言 <em>"just a random number"</em> 级别的调参——但面试官爱问，记住数字和它解决的「饥饿」问题即可。</p>
+</div>
+
+<h2 data-n="04">阻塞的两种命运：syscall vs netpoller</h2>
+<div class="col">
+<p>这是 GMP 最容易被追问、也最能拉开差距的一格。同样是「G 阻塞了」，结果完全不同：</p>
+</div>
+<div class="tw"><table>
+<thead><tr><th></th><th>网络 IO（netpoller 路线）</th><th>阻塞式 syscall（handoff 路线）</th></tr></thead>
+<tbody>
+<tr><th>典型代码</th><td><code>conn.Read</code>、<code>http.Get</code></td><td>本地文件读写、<code>cgo</code> 调用、部分 <code>syscall.Syscall</code></td></tr>
+<tr><th>底层 fd</th><td>runtime 设为<strong>非阻塞</strong>，注册进 epoll/kqueue</td><td>无法非阻塞化，线程只能真的陷进内核等</td></tr>
+<tr><th>G 的动作</th><td><code>gopark</code> → <code>_Gwaiting</code>，挂到 netpoller</td><td><code>entersyscall</code> → <code>_Gsyscall</code>，G 仍绑在 M 上</td></tr>
+<tr><th>M 的命运</th><td><strong>不阻塞</strong>，立刻回 <code>schedule()</code> 跑下一个 G</td><td><strong>真的被挂起</strong>，跟着 G 一起卡在内核里</td></tr>
+<tr><th>P 的命运</th><td>纹丝不动，继续跟着 M 干活</td><td>置 <code>_Psyscall</code>，被 sysmon 或 M 主动<strong>移交（handoff）</strong>给别的 M</td></tr>
+<tr><th>线程数影响</th><td>无，百万连接也只要 GOMAXPROCS 条线程</td><td><strong>会涨</strong>：每个卡住的 syscall 占一条线程</td></tr>
+<tr><th>唤醒</th><td>epoll 就绪 → <code>netpoll()</code> 捞回 → <code>goready</code></td><td>syscall 返回 → <code>exitsyscall</code> 抢回 P，抢不到就把 G 丢全局队列、M 去睡</td></tr>
+</tbody></table></div>
+<div class="note"><b>能落到线上的结论：</b>「Go 能扛十万连接」靠的是 netpoller，不是 goroutine 便宜；而「协程数不多但线程数飙到几百」几乎总是第二列——大量 cgo 或文件 IO 触发 handoff，每次 handoff 都可能新建 M。排查就一句话：<code>runtime.NumGoroutine()</code> 正常但 <code>/proc/&lt;pid&gt;/status</code> 的 Threads 很高 → 查阻塞式 syscall。</div>
+
+<h2 data-n="05">抢占：Go 1.14 的那道分水岭</h2>
+<div class="col">
+<p>沙盘第 6 个场景演的就是这个。核心矛盾：调度器要在<strong>安全点</strong>才能停下一个 G（否则栈上有半截寄存器状态，GC 无法正确扫描）。</p>
+<ul>
+<li><strong>1.14 之前 · 协作式抢占</strong>：编译器只在<em>函数调用</em>的栈增长检查（<code>morestack</code>）处埋抢占检查点。于是一个没有任何函数调用的纯计算死循环 <code>for {i++}</code> 永远不会让出——轻则那个 P 被独占，重则 <strong>STW 阶段所有 goroutine 一起挂死</strong>，因为 GC 等不到它停。</li>
+<li><strong>1.14 起 · 基于信号的异步抢占</strong>：sysmon 发现某 G 连续运行超过 <code>forcePreemptNS = 10ms</code>，调 <code>preemptM</code> 向该 M 发 <strong><code>SIGURG</code></strong>。信号处理函数 <code>asyncPreempt</code> 检查当前指令是否在异步安全点，是则把寄存器现场保存进 G、伪造一个栈帧让 G 主动返回调度器，G 被丢回<strong>全局队列</strong>（不是本地，避免它立刻又被同一个 P 捞回去）。</li>
+</ul>
+<p><strong>为什么选 SIGURG？</strong>它几乎没人用（带外数据通知早已废弃），不与 debugger、cgo 库常用的信号冲突，且不会被 <code>syscall</code> 的 EINTR 语义搞乱。这是个很好的「追问第三层」素材。</p>
+</div>
+
+<h2 data-n="06">动手：把文字变成手感</h2>
+<div class="col">
+<p>光看图会忘，跑一遍才记得住。两条命令：</p>
+</div>
+<pre>GODEBUG=schedtrace=1000 ./yourapp      <i># 每秒打印一行调度器状态</i>
+GODEBUG=schedtrace=1000,scheddetail=1 ./yourapp  <i># 展开到每个 P / M / G</i>
+
+SCHED 1004ms: gomaxprocs=<b>8</b> idleprocs=<b>6</b> threads=<b>11</b> spinningthreads=<b>1</b> \
+              idlethreads=<b>4</b> runqueue=<b>3</b> [<b>0 2 0 1 0 0 0 0</b>]
+                                                 └─ 每个 P 的本地队列长度</pre>
+<div class="tw"><table>
+<thead><tr><th>字段</th><th>含义</th><th>它不对劲时说明什么</th></tr></thead>
+<tbody>
+<tr><td><code>gomaxprocs</code></td><td>P 的总数</td><td>容器里等于宿主核数 → 忘了 automaxprocs（Go 1.25 前）</td></tr>
+<tr><td><code>idleprocs</code></td><td>空闲 P 数</td><td>持续等于 gomaxprocs 但业务很慢 → 卡在锁或 syscall，不是 CPU 不够</td></tr>
+<tr><td><code>threads</code></td><td>M 总数</td><td>远大于 gomaxprocs → 阻塞式 syscall / cgo 触发了大量 handoff</td></tr>
+<tr><td><code>spinningthreads</code></td><td>正在自旋找活的 M</td><td>长期居高 → 任务粒度太碎，偷取开销盖过收益</td></tr>
+<tr><td><code>runqueue</code></td><td>全局队列长度</td><td>持续增长 → 整体过载，或有 G 被频繁抢占丢回全局</td></tr>
+<tr><td><code>[...]</code></td><td>各 P 本地队列</td><td>严重不均且不收敛 → 有 P 长时间被占（死循环 / 长 syscall）</td></tr>
+</tbody></table></div>
+<div class="col">
+<p>再配一个 30 行的对照实验：起一个纯计算死循环的 goroutine，分别用 Go 1.13 和 1.14+ 编译，看 <code>runtime.GC()</code> 会不会挂死——这是把「异步抢占」从概念变成肌肉记忆最快的路子。</p>
+</div>
+
+<h2 data-n="07">自测：能扛住三层追问吗</h2>
+<div class="col"><p>盖住答案先自己讲一遍，卡壳的就回上面的沙盘重走一遍那个场景。</p></div>
+
+<details><summary>为什么要有 P？只有 G 和 M 不行吗？</summary><div class="ans">
+<p>G-M 模型下所有 G 挂全局队列、由 <code>sched.lock</code> 保护，多核时锁竞争严重；M 之间无亲缘性，缓存局部性差；M 阻塞时无法把「待执行的 G 集合」转交给别人。P 把运行队列、mcache、defer 池收拢为私有资源，使调度快路径完全无锁，同时用 P 的数量精确控制并行度，并让「许可证」可以在 M 之间移交（handoff）。</p>
+</div></details>
+
+<details><summary>M 数量会超过 GOMAXPROCS 吗？什么时候？</summary><div class="ans">
+<p>会。GOMAXPROCS 限制的是<strong>同时执行 Go 代码</strong>的线程数（即 P 数），不是线程总数。每当一个 M 陷入阻塞式 syscall，它的 P 会被移交给另一个 M（复用空闲 M 或新建），于是线程数增长。上限由 <code>runtime/debug.SetMaxThreads</code> 控制，默认 10000，超过直接 crash。</p>
+</div></details>
+
+<details><summary>work stealing 为什么要随机遍历，而不是从 P0 顺序扫？</summary><div class="ans">
+<p>顺序扫会让所有空闲 M 同时盯上同一个 P，造成对该 P 队列的原子操作热点，且偷完还是不均。随机起点 + 固定步长（源码里用互质步长保证遍历完整）把竞争打散。另外偷取时取<strong>一半</strong>而非一个，是为了摊薄偷取本身的同步开销。</p>
+</div></details>
+
+<details><summary>G 阻塞在 channel 上时，P 和 M 各自会怎样？</summary><div class="ans">
+<p>channel 阻塞走 <code>gopark</code>：G 状态转 <code>_Gwaiting</code>，被挂到 channel 的 <code>sendq/recvq</code> 等待队列上，与 P、M 彻底解绑。M 不阻塞，回到 <code>schedule()</code> 继续从当前 P 取下一个 G；P 也毫发无伤。对端 <code>goready</code> 时 G 变 <code>_Grunnable</code>，优先放进唤醒者 P 的 <code>runnext</code> 槽（因为 ping-pong 模式下它极可能马上要跑，缓存最热）。<strong>关键对比</strong>：channel/mutex/netpoll 阻塞都不占 M，只有真正陷内核的 syscall 才占。</p>
+</div></details>
+
+<details><summary>runnext 存在的意义？为什么不直接放队头？</summary><div class="ans">
+<p>runnext 是一个单槽的「插队位」，且<strong>不参与常规的偷取</strong>（偷取者要拿它得自旋等待一小会儿）。目的是保护生产者-消费者/ping-pong 这类模式的局部性：A 唤醒 B 后自己马上阻塞，B 应当立刻在同一个 P 上接着跑，共享的数据还在 L1/L2 里。放队头也能优先，但会被 stealing 直接卷走一半带走，局部性就丢了。</p>
+</div></details>
+
+<details><summary>一个纯计算的 <code>for {}</code> 死循环，在 Go 1.13 和 1.21 上分别会发生什么？</summary><div class="ans">
+<p>1.13：协作式抢占只在函数调用的栈检查点生效，该 G 永不让出。若此时触发 GC，STW 需要所有 P 停下，等不到它 → <strong>整个程序挂死</strong>。1.21（≥1.14）：sysmon 每轮扫描发现它运行超 10ms，<code>preemptM</code> 发 <code>SIGURG</code>，信号处理里在异步安全点保存现场、把 G 踢回全局队列，程序正常。</p>
+</div></details>
+
+<details><summary>sysmon 是不是也占一个 P？</summary><div class="ans">
+<p>不占。sysmon 跑在一个<strong>不绑定 P</strong> 的独立 M 上（<code>newm(sysmon, nil)</code>），在 g0 栈上死循环，睡眠间隔 20μs 起、按空闲程度指数退避到 10ms。它的职责：抢占超时的 G、retake 长时间 <code>_Psyscall</code> 的 P、阻塞式 netpoll 捞回就绪 G、强制触发 2 分钟没跑过的 GC、归还多余内存。因为不占 P，它才能在所有 P 都被占死时仍然工作——这正是它能救回死循环的前提。</p>
+</div></details>
+
+<details><summary>本地队列满了（256 个）新建 G 会怎样？</summary><div class="ans">
+<p><code>runqput</code> 发现本地队列满时，会把本地队列的<strong>前一半（128 个）连同新 G 一起</strong>打包，加锁一次性挂到全局队列尾部。一次批量转移而不是逐个溢出，是为了摊薄全局锁开销，同时让这批 G 有机会被其它 P 领走。</p>
+</div></details>
+
+<div class="foot">
+  <span>runtime/proc.go · runtime2.go · go1.23</span>
+  <span>learning/think/interview/go</span>
+</div>
+
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  // ---- state helpers -------------------------------------------------
+  function G(id,cls,tag){ return {id:id, cls:cls||"cpu", tag:tag||""}; }
+  function clone(s){ return JSON.parse(JSON.stringify(s)); }
+
+  function base(){
+    return {
+      ps:[
+        {id:"P0", m:"M0", st:"run", cur:null, next:null, runq:[]},
+        {id:"P1", m:"M1", st:"run", cur:null, next:null, runq:[]}
+      ],
+      grq:[], net:[], idle:["M2","M3"], sysmon:"—", hot:[]
+    };
+  }
+
+  function scen(title, sub, build){
+    var frames=[], s=base();
+    function step(say, hot){
+      s.hot = hot||[];
+      frames.push({say:say, st:clone(s)});
+    }
+    build(s, step, G);
+    return {title:title, sub:sub, frames:frames};
+  }
+
+  // ---- the six scenarios ---------------------------------------------
+  var SCENARIOS = [
+
+    scen("基础调度","schedule loop", function(s,step){
+      s.ps[0].cur=G("G1","on"); s.ps[0].runq=[G("G2"),G("G3"),G("G4")];
+      s.ps[1].cur=G("G5","on"); s.ps[1].runq=[G("G6")];
+      step("初始状态。<b>M 必须持有一个 P 才能执行 Go 代码</b>。M0 拿着 P0 在跑 <code>G1</code>，本地队列里还排着三个就绪的 G。整个调度循环 <code>schedule()</code> 跑在 M 自带的 <code>g0</code> 栈上，取到 G 后用 <code>gogo</code> 切到 G 的栈去执行。");
+
+      s.ps[0].next=G("G9","cpu","new");
+      step("<code>G1</code> 里执行了 <code>go G9()</code>。新 G 不是塞到队尾，而是抢占 <b>runnext 插队槽</b>——赌它马上就要被调度，此刻数据还在当前 CPU 缓存里最热。",["G9"]);
+
+      s.ps[0].cur=null;
+      step("<code>G1</code> 执行完毕（<code>_Gdead</code>），控制权通过 <code>mcall</code> 切回 g0 栈，重新进入 <code>schedule()</code>。");
+
+      s.ps[0].cur=G("G9","on"); s.ps[0].next=null;
+      step("查找顺序的第一站是 <b>runnext</b>：直接命中 <code>G9</code>。整个过程<b>没有加任何锁</b>——这就是快路径，线上 99% 的调度都止步于此。",["G9"]);
+
+      s.ps[0].cur=null;
+      step("<code>G9</code> 也结束了。runnext 已空，回落到本地运行队列。");
+
+      s.ps[0].cur=G("G2","on"); s.ps[0].runq=[G("G3"),G("G4")];
+      step("从本地 <code>runq</code> 队头取出 <code>G2</code>。本地队列是一个 <b>256 槽的无锁环形数组</b>，只有 owner P 会写队头队尾，其它 P 来偷时才走原子操作。P1 那边同理，两条车道互不干扰——这就是引入 P 之后最大的收益。",["G2"]);
+    }),
+
+    scen("全局队列与「61」","防饥饿", function(s,step,G){
+      s.ps[0].cur=G("G1","on"); s.ps[0].runq=[G("G2"),G("G3"),G("G4"),G("G5")];
+      s.ps[1].cur=G("G6","on"); s.ps[1].runq=[G("G7")];
+      s.grq=[G("G20"),G("G21"),G("G22")];
+      step("场景：P0 本地队列一直有活干，而全局队列里躺着三个 G——它们可能来自本地队列溢出、被抢占踢回来的、或者 syscall 返回时无 P 可用而寄存的。");
+
+      step("<b>问题来了：</b>如果调度器永远优先本地队列，只要 P0 的活源源不断，<code>G20~G22</code> 就永远排不上号——<b>全局队列饥饿</b>。");
+
+      s.ps[0].cur=G("G2","on"); s.ps[0].runq=[G("G3"),G("G4"),G("G5")];
+      s.sysmon="schedtick = 60";
+      step("正常调度继续，每完成一次调度 <code>p.schedtick++</code>。");
+
+      s.sysmon="schedtick = 61 → 61 % 61 == 0";
+      s.ps[0].cur=null; s.ps[0].runq=[G("G3"),G("G4"),G("G5")]; s.grq=[G("G20","stl"),G("G21"),G("G22")];
+      step("第 61 次调度触发特判：<code>if pp.schedtick%61 == 0 && sched.runqsize > 0</code> —— <b>强制先看一眼全局队列</b>。",["G20"]);
+
+      s.ps[0].cur=G("G20","on"); s.grq=[G("G21"),G("G22")]; s.sysmon="—";
+      step("拿 <code>sched.lock</code>，取走 <code>G20</code> 执行。<b>为什么是 61？</b>取质数避开与其它周期性行为共振；大到快路径几乎无开销，小到能保证全局队列不被无限推迟。这是个纯经验值，但记住它解决的是「饥饿」问题。",["G20"]);
+    }),
+
+    scen("Work Stealing","偷一半", function(s,step,G){
+      s.ps[0].cur=G("G1","on"); s.ps[0].runq=[G("G2"),G("G3"),G("G4"),G("G5")];
+      s.ps[1].cur=null; s.ps[1].runq=[];
+      step("P1 上的 G 全跑完了，本地队列和 runnext 都空。M1 于是进入慢路径 <code>findRunnable()</code>。");
+
+      s.ps[1].st="spin";
+      step("<b>第 1、2 站：</b>再查一遍本地队列 → 空；查全局队列 <code>sched.runq</code> → 也空。M1 把自己标记为 <code>spinning</code>（自旋找活状态），这个标记很重要：它让新任务产生时知道「已经有 M 在找活了，不用再唤醒别的线程」。");
+
+      step("<b>第 3 站：</b><code>netpoll(0)</code> 非阻塞探一下 epoll，看有没有网络 IO 刚好就绪 —— 也没有。");
+
+      s.ps[0].runq=[G("G2"),G("G3"),G("G4","stl"),G("G5","stl")];
+      step("<b>第 4 站：work stealing。</b>以<b>随机</b>的起点、互质的步长遍历所有其它 P（随机是为了避免所有空闲 M 一窝蜂盯上同一个 P，制造原子操作热点）。选中 P0，准备从它队列<b>尾部</b>偷走<b>一半</b>。",["G4","G5"]);
+
+      s.ps[0].runq=[G("G2"),G("G3")];
+      s.ps[1].runq=[G("G4","stl"),G("G5","stl")];
+      step("一次搬走两个而不是一个——摊薄偷取本身的同步开销。注意 <b>P0 的 runnext 槽不会被轻易偷走</b>：偷取者要拿它必须先自旋等待一小段时间，以此保护 ping-pong 模式的局部性。",["G4","G5"]);
+
+      s.ps[1].st="run"; s.ps[1].cur=G("G4","on"); s.ps[1].runq=[G("G5")];
+      step("M1 取消 spinning 标记，开始执行 <code>G4</code>，两条车道重新均衡。<b>如果偷不到呢？</b>M1 会再查一遍全局队列和 GC 后台任务，仍然一无所获就<b>解绑 P、把自己挂进 <code>sched.midle</code> 睡眠</b>（futex 阻塞），等有新任务时被 <code>wakep</code> 唤醒。",["G4"]);
+    }),
+
+    scen("Handoff","阻塞 syscall", function(s,step,G){
+      s.ps[0].cur=G("G3","on"); s.ps[0].runq=[G("G4"),G("G5")];
+      s.ps[1].cur=G("G6","on");
+      step("<code>G3</code> 即将发起一个<b>阻塞式系统调用</b>——读本地文件、或者一次耗时的 cgo 调用。这类 fd 无法被设成非阻塞，线程只能真的陷进内核里等。");
+
+      s.ps[0].cur=G("G3","sys"); s.ps[0].st="sys"; s.ps[0].m="M0 ⟂";
+      step("<code>entersyscall</code>：G3 转入 <code>_Gsyscall</code>，M0 跟着一起陷入内核。P0 被置为 <code>_Psyscall</code> 状态，<b>与 M0 逻辑解绑但仍保留互相的指针</b>（为了快速返回时能原样接回）。",["G3"]);
+
+      s.sysmon="扫描中… P0 处于 _Psyscall";
+      step("<b>如果 syscall 很快返回</b>（微秒级），<code>exitsyscall</code> 会直接把 P0 抢回来接着跑，全程零调度开销——这是最常见的快路径，别忘了提。");
+
+      s.sysmon="P0 _Psyscall 已超 10ms → retake()";
+      step("<b>但如果卡住了：</b>sysmon 扫到 P0 停在 <code>_Psyscall</code> 超过 10ms（或它本地队列里还有活、或没有空闲 P 了），就出手执行 <code>retake()</code>——不能让一张许可证陪着一条卡死的线程一起闲着。");
+
+      s.ps[0].m="M2"; s.ps[0].st="run"; s.ps[0].cur=G("G4","on"); s.ps[0].runq=[G("G5")]; s.idle=["M3"];
+      s.sysmon="handoffp(P0) → M2";
+      step("<b>Handoff（P 分离）：</b>P0 被摘下来交给空闲的 <b>M2</b>（若无空闲 M 则 <code>newm</code> 新建一条线程），立刻继续执行本地队列里的 <code>G4</code>。<b>并行度得以保持</b>——这就是整个 handoff 机制存在的唯一理由。",["G4"]);
+
+      s.grq=[G("G3","cpu","syscall done")]; s.idle=["M3","M0"]; s.sysmon="—";
+      step("稍后 syscall 返回，M0 醒来发现 <b>自己已经没有 P 了</b>：它会先试着抢一个空闲 P，抢不到就把 <code>G3</code> 丢进<b>全局队列</b>，自己挂到 <code>sched.midle</code> 睡觉。<b>线上结论：</b>大量阻塞 syscall / cgo → 反复 handoff → 线程数远超 GOMAXPROCS，默认到 10000 条就直接 crash。",["G3"]);
+    }),
+
+    scen("Netpoller","IO 不占 M", function(s,step,G){
+      s.ps[0].cur=G("G5","on",""); s.ps[0].runq=[G("G6"),G("G7")];
+      s.ps[1].cur=G("G8","on");
+      step("<code>G5</code> 执行 <code>conn.Read(buf)</code>。对比上一个场景：这次的 fd 是<b>网络</b> fd，runtime 在创建时就把它设成了 <b>非阻塞</b>并注册进 epoll(Linux) / kqueue(BSD)。");
+
+      s.net=[G("G5","wait","waiting fd")]; s.ps[0].cur=null;
+      step("数据没就绪，<code>gopark</code> 把 <code>G5</code> 转入 <code>_Gwaiting</code>，从 M 上摘下来挂到 <b>netpoller</b> 的等待结构上，并记录 <code>pollDesc</code>。<b>关键：M0 完全没有阻塞。</b>",["G5"]);
+
+      s.ps[0].cur=G("G6","on"); s.ps[0].runq=[G("G7")];
+      step("M0 直接回到 <code>schedule()</code>，从本地队列取 <code>G6</code> 接着跑。<b>P 和 M 都毫发无伤</b>——这才是「十万连接只要几条线程」的真正原因，而不是「goroutine 便宜」。",["G6"]);
+
+      s.net=[G("G5","stl","fd ready")];
+      s.sysmon="netpoll() 捞回就绪 G";
+      step("数据到达，内核标记 fd 可读。调度器会在两个地方发现它：<code>findRunnable()</code> 里的非阻塞 <code>netpoll(0)</code>，以及 sysmon 定期的阻塞式 <code>netpoll</code>。");
+
+      s.net=[]; s.grq=[]; s.ps[0].next=G("G5","cpu","ready"); s.sysmon="—";
+      step("<code>goready</code> 把 <code>G5</code> 转回 <code>_Grunnable</code> 并放进运行队列（优先 runnext / 本地队列，溢出则入全局）。<b>整条链路上没有任何一条 OS 线程为这次 IO 等待过</b>——这就是「同步的写法，异步的性能」的全部秘密。",["G5"]);
+    }),
+
+    scen("异步抢占","SIGURG", function(s,step,G){
+      s.ps[0].cur=G("G8","on","for{i++}"); s.ps[0].runq=[G("G9"),G("G10")];
+      s.ps[1].cur=G("G11","on");
+      step("<code>G8</code> 是一个<b>没有任何函数调用</b>的纯计算死循环，例如 <code>for { i++ }</code>。这是历史上最经典的 Go 挂死场景。");
+
+      s.sysmon="计时 G8: 4ms";
+      step("<b>Go 1.14 之前（协作式抢占）：</b>编译器只在<b>函数调用</b>的栈增长检查 <code>morestack</code> 处埋抢占检查点。没有函数调用 = 没有检查点 = <b>永远不让出</b>。轻则 P0 被独占、<code>G9/G10</code> 饿死；重则一旦触发 GC 需要 STW，等不到 G8 停下，<b>整个程序挂死</b>。");
+
+      s.sysmon="计时 G8: 10ms ≥ forcePreemptNS";
+      step("<b>Go 1.14 起：</b>sysmon 跑在不绑定 P 的独立 M 上（所以哪怕所有 P 都被占死它照样能工作），每轮扫描 <code>retake()</code> 发现 <code>G8</code> 已连续运行超过 <code>forcePreemptNS = 10ms</code>。");
+
+      s.sysmon="preemptM(M0) → SIGURG";
+      s.ps[0].cur=G("G8","pre","preempt");
+      step("<code>preemptM</code> 向 M0 所在线程发送 <b><code>SIGURG</code></b> 信号。<b>为什么挑 SIGURG？</b>它几乎无人使用（带外数据通知早已废弃），不会跟 debugger、cgo 第三方库抢，也不会被 syscall 的 EINTR 语义搞乱——一个很好的「追问第三层」素材。",["G8"]);
+
+      step("信号处理函数 <code>asyncPreempt</code> 在 M0 上执行：检查被中断的指令位置是否处于<b>异步安全点</b>（不在写屏障中、不在不可抢占的 runtime 代码里），是则把全部寄存器保存进 G8 的现场，并伪造一个栈帧让它「主动」返回调度器。<b>安全点</b>这个约束是必须的，否则 GC 扫栈会读到半截状态。");
+
+      s.ps[0].cur=null; s.grq=[G("G8","pre","preempted")]; s.sysmon="—";
+      step("<code>G8</code> 转为 <code>_Grunnable</code>，被丢进 <b>全局队列</b>（注意：不是本地队列——避免它立刻又被同一个 P 捞回去继续霸占）。",["G8"]);
+
+      s.ps[0].cur=G("G9","on"); s.ps[0].runq=[G("G10")];
+      step("M0 回到 <code>schedule()</code>，取出 <code>G9</code> 执行。GC 的 STW 也终于能顺利完成。<b>一句话收尾：</b>抢占的难点从来不是「怎么打断」，而是「打断在哪儿才能让 GC 看懂这个栈」。",["G9"]);
+    })
+  ];
+
+  // ---- rendering ------------------------------------------------------
+  var $ = function(id){ return document.getElementById(id); };
+  var cur=0, frame=0, timer=null;
+
+  function gEl(g, hot){
+    var e=document.createElement("span");
+    e.className="g "+g.cls+(hot.indexOf(g.id)>-1?" flash":"");
+    e.textContent=g.id;
+    if(g.tag){ var t=document.createElement("span"); t.className="tag"; t.textContent=g.tag; e.appendChild(t); }
+    return e;
+  }
+  function fillQ(node, list, hot, emptyTxt){
+    node.innerHTML="";
+    if(!list.length){ var s=document.createElement("span"); s.className="empty"; s.textContent=emptyTxt||"空"; node.appendChild(s); return; }
+    list.forEach(function(g){ node.appendChild(gEl(g,hot)); });
+  }
+
+  var ST={run:["运行中","run"], idle:["空闲","idle"], sys:["_Psyscall","sys"], spin:["自旋找活","spin"]};
+
+  function render(){
+    var sc=SCENARIOS[cur], f=sc.frames[frame], st=f.st, hot=st.hot||[];
+
+    fillQ($("grq"), st.grq, hot);
+    fillQ($("net"), st.net, hot);
+    $("sysmon").textContent = st.sysmon;
+
+    var idle=$("idle"); idle.innerHTML="";
+    if(!st.idle.length){ idle.innerHTML='<span class="empty">无</span>'; }
+    st.idle.forEach(function(m){
+      var e=document.createElement("span"); e.className="mchip zzz"; e.textContent=m+" 💤"; idle.appendChild(e);
+    });
+
+    var field=$("pfield"); field.innerHTML="";
+    st.ps.forEach(function(p){
+      var card=document.createElement("div");
+      card.className="pcard"+((p.cur&&hot.indexOf(p.cur.id)>-1)?" hot":"");
+      var stt=ST[p.st]||ST.run;
+      card.innerHTML =
+        '<div class="phead"><span class="pid">'+p.id+'</span>'+
+        '<span class="mchip">'+p.m+'</span>'+
+        '<span class="pill '+stt[1]+'">'+stt[0]+'</span></div>'+
+        '<div class="slot"><div class="slot-l">执行中 <em>curg</em></div><div class="q" data-k="cur"></div></div>'+
+        '<div class="slot"><div class="slot-l">插队槽 <em>runnext</em></div><div class="q" data-k="next"></div></div>'+
+        '<div class="slot"><div class="slot-l">本地队列 <em>runq[256]</em></div><div class="q" data-k="runq"></div></div>';
+      fillQ(card.querySelector('[data-k="cur"]'), p.cur?[p.cur]:[], hot, "—");
+      fillQ(card.querySelector('[data-k="next"]'), p.next?[p.next]:[], hot, "—");
+      fillQ(card.querySelector('[data-k="runq"]'), p.runq, hot, "空");
+      field.appendChild(card);
+    });
+
+    $("say").innerHTML=f.say;
+    $("stepn").textContent=(frame+1)+" / "+sc.frames.length;
+    $("prev").disabled = frame===0;
+    $("next").disabled = frame===sc.frames.length-1;
+
+    var dots=$("dots"); dots.innerHTML="";
+    sc.frames.forEach(function(_,i){
+      var b=document.createElement("button");
+      b.className="dot"; b.setAttribute("aria-label","第 "+(i+1)+" 步");
+      if(i===frame) b.setAttribute("aria-current","true");
+      b.onclick=function(){ stop(); frame=i; render(); };
+      dots.appendChild(b);
+    });
+
+    Array.prototype.forEach.call(document.querySelectorAll(".tab"), function(t,i){
+      t.setAttribute("aria-selected", i===cur ? "true":"false");
+    });
+  }
+
+  function stop(){ if(timer){ clearInterval(timer); timer=null; $("play").textContent="自动播放"; } }
+  function go(d){
+    stop();
+    var n=frame+d, len=SCENARIOS[cur].frames.length;
+    if(n<0||n>=len) return;
+    frame=n; render();
+  }
+
+  // tabs
+  var tabsEl=$("tabs");
+  SCENARIOS.forEach(function(sc,i){
+    var b=document.createElement("button");
+    b.className="tab"; b.setAttribute("role","tab");
+    b.innerHTML='<i>0'+(i+1)+'</i>'+sc.title;
+    b.title=sc.sub;
+    b.onclick=function(){ stop(); cur=i; frame=0; render(); };
+    tabsEl.appendChild(b);
+  });
+
+  $("prev").onclick=function(){ go(-1); };
+  $("next").onclick=function(){ go(1); };
+  $("reset").onclick=function(){ stop(); frame=0; render(); };
+  $("play").onclick=function(){
+    if(timer){ stop(); return; }
+    if(frame===SCENARIOS[cur].frames.length-1) frame=0;
+    $("play").textContent="暂停";
+    timer=setInterval(function(){
+      if(frame>=SCENARIOS[cur].frames.length-1){ stop(); return; }
+      frame++; render();
+    }, 3400);
+    render();
+  };
+
+  document.addEventListener("keydown", function(e){
+    if(e.target.tagName==="INPUT") return;
+    if(e.key==="ArrowRight"){ go(1); }
+    if(e.key==="ArrowLeft"){ go(-1); }
+  });
+
+  render();
+})();
+</script>

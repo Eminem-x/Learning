@@ -22,6 +22,8 @@
 **四层心智模型**：存储层（放住）→ 计算层（算一遍）→ 服务层/OLAP（查得快）→ 调度层（按时按依赖跑）。
 维度建模是正交的一维（表怎么组织），术语是通用底座。
 
+> 上面这张图是**通用形态**。我自己那条链路长什么样（crawl 采集侧、PG 维度、Spark on K8s client 模式、StarRocks/ES 双写互补、S3/SR/ES 三处生命周期治理）见 [`08` ETL 链路深挖](./08-etl-pipeline-deep-dive-20260723.md)，风险与改造顺序见 [`09` 架构评审](./09-etl-architecture-review-20260723.md)。
+
 ## 文档清单
 
 | # | 文档 | 覆盖内容 | 面试题数 |
@@ -34,8 +36,11 @@
 | 05 | [数仓建模：维度建模与分层](./05-数仓建模-维度建模与分层.md) | fact/dim、**粒度**、星型/雪花、Kimball 四步、度量可加性、ODS/DWD/DWS/ADS、宽表红线、SCD、拉链表 | 10 |
 | 06 | [Airflow 调度 + MongoDB](./06-Airflow调度与MongoDB.md) | DAG、Operator/Task/TI、**execution_date 讲透**、catchup/backfill、Sensor、幂等；MongoDB 定位与场景 | 12 |
 | 07 | [模拟面试题库](./07-模拟面试题库.md) | **3 轮混合主题自测题（30 题）+ 面试官得分点清单**：热身覆盖面 → 深挖原理 → 场景追问 | 30 |
+| 08 | [**我的 ETL 链路深挖**](./08-etl-pipeline-deep-dive-20260723.md) | **真实链路的架构图 + 逐环节取舍 + 三层追问**：crawl 弱契约上游、Hive 外表/Metastore 单点、维度快照链式依赖、**CeleryExecutor 补课**、**client 模式 OOM 连坐**、`partitionOverwriteMode` 坑、Stream Load label 幂等、ES alias 与 `es.mapping.id` 陷阱、生命周期治理；含 **3 个 STAR 故事**（跨云迁移 / COS 限流 / ES shard 治理） | 13 |
+| 09 | [**ETL 架构评审**](./09-etl-architecture-review-20260723.md) | **风险清单 P0/P1/P2 + 改造路线图**：三处静默失效、恢复窗口 < 发现窗口、OOM 爆炸半径；优先级×成本矩阵；**「你觉得架构有什么问题」四段式话术** | 7 |
 
 `00`~`06` 共 ~2900 行 / 78 道知识点问答；`07` 是配套自测题库。
+`08`/`09` 是**真实项目沉淀**——前者回答「你负责什么」，后者回答「你觉得它有什么问题」。
 
 ## 推荐复习顺序
 
@@ -47,6 +52,7 @@
 4. **`02` 存储层 + `03` Trino** —— 补齐 Spark 上下游（数据从哪读、算完谁来查）。
 5. **`04` OLAP 服务层** —— 记住那个选型口诀就能答好"ES/CH/SR 怎么选"。
 6. **`06` Airflow + MongoDB** —— 调度是 ETL 岗的基本盘，`execution_date` 和幂等是高频考点。
+7. **`08` + `09` 真实链路** —— 前面都是「通用原理」，这两篇是「**我的**链路」。面试里占分最高的其实是这块：原理谁都能背，但能把自己维护的系统讲出取舍、风险和改造顺序的人很少。**临考前最后过的应该是这两篇，不是八股。**
 
 ## 面试临场速记（一句话版）
 
@@ -62,6 +68,14 @@
 - **数仓为什么分层** = 复用、解耦、口径统一（ODS→DWD→DWS→ADS）。
 - **execution_date** = 数据的逻辑日期，不是实际运行时刻；T+1 里它是昨天。
 - **幂等** = 任务重跑/回补结果一致，靠按分区 OVERWRITE 而非 append。
+- **partitionOverwriteMode** = 默认 `static` 在动态分区写入时会清空整表；写分区任务必须确认是 `dynamic`。
+- **CeleryExecutor** = worker 常驻、槽位共享容器内存，**没有 per-task limit** → 一个 task OOM 杀掉整台 worker。
+- **client vs cluster** = client 换来「日志直接进 Airflow」的零接入成本，代价是 driver 寄生在调度器容器里。
+- **Stream Load label** = 同一 label 只成功一次，是 SR 侧幂等的第二道保险；但 upsert **只增不删**。
+- **ES 幂等** = 看 `es.mapping.id` 配没配（没配则 ES 随机生成 `_id`，重试静默翻倍）。
+- **ILM vs ISM** = ILM 是 Elasticsearch 的，ISM 是 OpenSearch 的（我两个都用过）。
+- **恢复窗口** = 上游 S3 保留期，不是 ES/SR 的保留期；必须 > 故障发现延迟。
+- **静默失效 > 报错失败** = 报错的问题损失有界，系统「以为自己成功了」才致命。
 
 ---
 

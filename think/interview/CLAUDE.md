@@ -99,15 +99,19 @@
 | **SQL/事务**：隔离级别、MVCC、锁、三大日志（redo/undo/binlog） | 4 | 进行 | [mysql 面试题库(广度)](./mysql/mysql-interview-questions-90-coverage-20260704.md)、[三大日志×ACID 动手实验台](./mysql/mysql-logs-lab/README.md)、[MVCC×隔离级别×幻读(含复现)](./mysql/mysql-mvcc-isolation-phantom-read-20260710.md) | 07-11 |
 | **主从复制**：主从/主备/读写分离辨析、异步/半同步/MGR、复制延迟与丢数据 | 4/8 | 进行 | [主从复制·一致性光谱](./mysql/mysql-replication-master-slave-standby-consistency-20260709.md) | 07-10 |
 | **树结构**：平衡二叉树/AVL、红黑树、B 树、B+ 树（为何数据库用 B+） | 4/2 | 进行 | [四棵树对比](./mysql/tree-structures-bplus-btree-rbtree-20260708.md) | 07-09 |
-| **Redis**：数据结构、单线程模型、持久化、淘汰策略、分布式锁、缓存三大问题 | 5 | 进行 | [redis 面试题库(广度)](./redis/redis-interview-questions-90-coverage-20260709.md) | 07-10 |
+| **Redis**：数据结构、单线程模型、持久化、淘汰策略、分布式锁、缓存三大问题、四种读写模式、大 Hash 拆分、QPS 与机器规格 | 5 | 进行 | [redis 面试题库(广度)](./redis/redis-interview-questions-90-coverage-20260709.md) | 08-05 |
 | **PostgreSQL**：进程模型、堆表 MVCC、VACUUM/XID 回卷、索引家族、SSI、WAL/复制（对照 MySQL） | 4/7 | 进行 | [postgresql 面试题库(广度)](./postgresql/postgresql-interview-questions-90-coverage-20260709.md) | 07-10 |
 | **MongoDB**：WiredTiger、索引与 explain、副本集、分片 | 5 | 未启 | — | — |
-| **Kafka**：分区副本 ISR、零拷贝+页缓存、ack 语义、消费者组 rebalance | 6 | 未启 | — | — |
+| **Kafka**：分区副本 ISR/HW/Leader Epoch、零拷贝+页缓存、ack 语义与幂等事务、消费者组 rebalance、积压回溯、MQ 选型 | 6 | 进行 | [kafka 面试题库(广度)](./kafka/kafka-interview-questions-90-coverage-20260723.md) | 07-24 |
 | **存储引擎**：B+Tree vs LSM、WAL、Compaction、RUM 放大（接 ../infra/ PG WAL） | 7 | 未启 | — | — |
-| **分布式事务/共识**：2PC/TCC/Saga、本地消息表、Raft 直觉 | 8 | 未启 | — | — |
+| **etcd**：Raft 共识（选举/日志复制/安全性/PreVote/成员变更）、MVCC+bbolt+WAL、线性一致读 ReadIndex、Watch、Lease、分布式锁选主、K8s 场景与运维红线 | 8/7/9 | 进行 | [etcd 面试题库(广度)](./etcd/etcd-interview-questions-90-coverage-20260723.md) | 07-24 |
+| **分布式事务/共识**：2PC/TCC/Saga、本地消息表、Raft 直觉（Raft 已在 etcd 篇打底） | 8 | 未启 | — | — |
+| **DDD 领域驱动设计**：战略（子域/限界上下文/上下文映射/ACL）、战术（实体/值对象/聚合/领域事件/资源库）、四层与六边形、CQRS、Go 落地 | 9 | 进行 | [DDD 领域驱动设计(白板级)](./ddd/ddd-domain-driven-design-20260723.md)、[Go 可运行 demo(双 BC)](./ddd/ddd-demo/README.md) | 07-24 |
 | **Go 内功**：GMP、GC、内存逃逸、channel/sync、context、defer | 1 | 未启 | — | — |
 | **Nginx**：epoll 事件模型、反向代理、负载均衡、调优 | 2/3/10 | 未启 | — | — |
-| **Spark 执行原理**：Shuffle、Catalyst、数据倾斜、内存模型 | 13 | 未启 | — | — |
+| **Spark 执行原理**：Shuffle、Catalyst、数据倾斜、内存模型 | 13 | 进行 | [大数据复习包 00~07](./bigdata/README.md) | 07-24 |
+| **【项目深挖】我的 ETL 链路**：全链路架构与取舍、client 模式 OOM 连坐、幂等三处实现、STAR 故事（跨云迁移/COS 限流/ES shard 治理） | 13/12 | 进行 | [ETL 链路深挖](./bigdata/08-etl-pipeline-deep-dive-20260723.md) | 07-24 |
+| **【项目深挖】ETL 架构评审**：静默失效三处、恢复窗口、风险清单与路线图、「架构有什么问题」话术 | 13/12/11 | 进行 | [ETL 架构评审](./bigdata/09-etl-architecture-review-20260723.md) | 07-24 |
 | （随学随加……） | — | — | — | — |
 
 ---
@@ -118,7 +122,7 @@
 
 - **算法/手写题**（格 2 的延伸）：LRU、并发安全 map、限流器、常见数据结构手写。靠刷题量，需单独计划。
 - **系统设计题库**（格 11 的延伸）：短链、Feed 流、秒杀、IM、排行榜。靠题单积累。
-- **项目深挖 / 行为面（STAR）**：oncall、ETL 等真实战绩是强项却没规划怎么讲——技术再硬，项目讲不清也挂。可能更适合放别的目录。
+- **项目深挖 / 行为面（STAR）**：~~没规划怎么讲~~ → **已开工**，见 [ETL 链路深挖](./bigdata/08-etl-pipeline-deep-dive-20260723.md) + [架构评审](./bigdata/09-etl-architecture-review-20260723.md)（含 3 个 STAR 故事骨架）。**仍缺**：oncall 经历的 STAR 化、非技术类行为面（冲突、协作、失败复盘）。
 
 ---
 
