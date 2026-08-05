@@ -116,6 +116,7 @@
 | **【面试速成】腾讯 IEG 游戏后台 T9/T10**：时间盒优先级、60 秒自我介绍、Go 三加考（sync.Pool/百万连接/pprof）、gRPC+Protobuf、跨界叙事三段映射、游戏后台概念、反问清单 | 1/3/9/12 | 进行 | [腾讯 IEG 游戏后台速成包](./tencent-ieg-game-backend-prep-20260805.md) | 08-06 |
 | **【面试速成】字节 Global Payment 国际支付（收银方向）**：资金安全九件套（事前/事中/事后）、三层对账与差错四分类、TCC 空回滚防悬挂、一致性五方案选型、收银台 vs 支付网关、「设计国际收银台」完整答案、三币种与 ISO 4217、热点账户与基因分片 | 8/4/11 | 进行 | [字节国际支付速成包](./bytedance-global-payment-prep-20260805.md) | 08-06 |
 | **网络（TCP/IP 面试速查）**：三次握手/两队列/SYN Flood、四次挥手与 TIME_WAIT、可靠传输、流控 vs 拥塞、BBR、TCP vs UDP/KCP、粘包、队头阻塞四层辨析、心跳、MTU/PMTU、TLS、**超时语义=未知**、epoll | 3 | 进行 | [TCP/IP 面试速查](../network/tcp-ip-interview-cram-20260805.md) | 08-06 |
+| **支付业务域**：收单四方模型、授权/请款/撤销/退款/拒付、**清算 vs 结算**、轧差、风险准备金、分账与二清、备付金、复式记账与试算平衡、四层单据、MDR 费率、PSP/PayFac/MOR | 8/11 | 进行 | [支付业务域概念](./pay/payment-domain-concepts-20260805.md) | 08-06 |
 | （随学随加……） | — | — | — | — |
 
 ---

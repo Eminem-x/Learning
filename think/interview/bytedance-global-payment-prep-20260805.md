@@ -4,7 +4,7 @@
 > 收录时间：2026-08-05 CST
 >
 > **定位**：这是**主场**，不是跨界。匹配度显著高于同期的腾讯 IEG 游戏后台岗——**语言门槛低（"至少一种"）、支付背景是明确的优先项、且是回流字节**。
-> 配套：[模拟面试复盘 §3.6 支付](./mock-interview-review-20260805.md)｜[腾讯 IEG 速成包](./tencent-ieg-game-backend-prep-20260805.md)｜[支付渠道接入](./pay/payment-channel-integration.md)｜[分布式事务范式](./pay/distributed-transaction-patterns.md)
+> 配套：**[支付业务域概念：收付退清结算](./pay/payment-domain-concepts-20260805.md)（先看这篇建立坐标系）**｜[模拟面试复盘 §3.6 支付](./mock-interview-review-20260805.md)｜[腾讯 IEG 速成包](./tencent-ieg-game-backend-prep-20260805.md)｜[支付渠道接入](./pay/payment-channel-integration.md)｜[分布式事务范式](./pay/distributed-transaction-patterns.md)｜[TCP/IP 速查 §11 超时语义](../network/tcp-ip-interview-cram-20260805.md)
 >
 > **一句话战略**：这场的门槛不是 Go 底层，是**「你怎么保证不资损」**。上一场模拟面试丢分最狠的对账、验签、多币种，**在这个岗从"补课项"升级成"必答题"**。
 
